@@ -1,3 +1,7 @@
 pandas
-sqlalchemy
+pymongo
 datetime
+fastapi
+uvicorn
+python-multipart
+requests
