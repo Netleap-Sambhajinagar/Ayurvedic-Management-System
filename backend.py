@@ -5,8 +5,7 @@ import os
 import requests
 import pandas as pd
 from datetime import datetime, timezone
-from sqlalchemy import create_engine
-
+from pymongo import MongoClient
 
 KEYWORD_WEIGHT_MAP: dict[str, float] = {
     "body":       1.0,
@@ -34,13 +33,6 @@ DEFAULT_WEIGHT: float = 1.0
 
 
 def identify_columns(df: pd.DataFrame):
-    """
-    Identify the respondent ID column and map every question column to a weight.
-    Uses word-boundary regex to avoid false-positive keyword matches.
-    Unmatched question columns are included at DEFAULT_WEIGHT so dosha
-    percentages are always calculated over the full question set.
-    Returns: (id_col_name, list_of_(col_name, weight))
-    """
     id_col = None
     question_map = []
 
@@ -119,141 +111,150 @@ def compute_confidence(dominant_score: float, second_score: float) -> float:
 
 
 
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRLTnJE7JwqVPx4MS05dyyq-xV-8E3ZaVws5-dI2QSKIoGlePBukgU2Mxo_pV_0w4zpF3VfJrbPrdUJ/pub?output=csv" 
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTnsJo1kvnQ46conDKuzx4pGo2RFymXKKBDCg6ZrozrNt3JxDLpHuEhNAACZsTd5wAYk5Qf8PQOiMsf/pub?output=csv" 
 
-engine = create_engine("sqlite:///vikriti.db")
+client = MongoClient("mongodb://localhost:27017/")
+db = client["vikriti_database"]
+collection = db["vikriti_results"]
 
 
-if GOOGLE_SHEET_URL:
-    print(f"Fetching data from Google Sheets URL...")
-    df = pd.read_csv(GOOGLE_SHEET_URL)
-else:
-    
-    base_dir = os.path.dirname(__file__) or os.getcwd()
-    preferred_names = [
-        "Vikriti_data - Form Responses 1.csv",
-        "vikriti_data.csv",
-    ]
-    csv_path = None
-    for name in preferred_names:
-        candidate = os.path.join(base_dir, name)
-        if os.path.exists(candidate):
-            csv_path = candidate
-            break
-
-    if csv_path is None:
-        raise FileNotFoundError(
-            "No GOOGLE_SHEET_URL provided and could not find a local CSV."
-        )
-    print(f"Loading local data from: {csv_path}")
-    df = pd.read_csv(csv_path)
-
-id_col, questions = identify_columns(df)
-results = []
-
-for _, row in df.iterrows():
-    vata_w  = 0.0
-    pitta_w = 0.0
-    kapha_w = 0.0
-
-    for col, weight in questions:
-        raw = str(row[col]).strip()
-        if not raw or raw.lower() == "nan":
-            continue
-
-        
-        m = re.match(r'^[\s\(\[]*([ABC])[.\)\]\s,:]', raw.upper())
-        if not m:
-            
-            m = re.match(r'^[\s]*([ABC])\s*$', raw.upper())
-        if not m:
-            continue
-        answer = m.group(1)
-
-        if answer == "A":
-            vata_w  += weight
-        elif answer == "B":
-            pitta_w += weight
-        elif answer == "C":
-            kapha_w += weight
-
-    total = vata_w + pitta_w + kapha_w
-    if total == 0:
-        continue
-
-    vata_score  = vata_w  / total
-    pitta_score = pitta_w / total
-    kapha_score = kapha_w / total
-
-    scores = {"Vata": vata_score, "Pitta": pitta_score, "Kapha": kapha_score}
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-    dominant        = sorted_scores[0][0]
-    dominant_score  = sorted_scores[0][1]
-    second_score    = sorted_scores[1][1]
-
-    severity        = classify_severity(dominant_score)
-    mixed_imbalance = detect_mixed_imbalance(vata_score, pitta_score, kapha_score)
-    confidence      = compute_confidence(dominant_score, second_score)
-    confidence_label = "Low" if confidence < LOW_CONFIDENCE_THRESHOLD else (
-                       "High" if confidence >= 0.70 else "Moderate")
-
-    
-    if mixed_imbalance:
-        vikriti_type = f"{mixed_imbalance} Vikriti"
+def run_analysis():
+    if GOOGLE_SHEET_URL:
+        print(f"Fetching data from Google Sheets URL...")
+        df = pd.read_csv(GOOGLE_SHEET_URL)
     else:
-        vikriti_type = f"{dominant} Vikriti"
-
-    results.append({
-        "name":             row[id_col],
-        "vata_score":       round(vata_score,  3),
-        "pitta_score":      round(pitta_score, 3),
-        "kapha_score":      round(kapha_score, 3),
-        "dominant":         dominant,
-        "severity":         severity,
-        "mixed_imbalance":  mixed_imbalance if mixed_imbalance else "None",
-        "confidence":       confidence,
-        "confidence_label": confidence_label,
-        "vikriti_type":     vikriti_type,
-        "created_at":       datetime.now(timezone.utc),
-    })
-
-if not results:
-    print("No valid responses found in CSV — nothing to save.")
-else:
-    results_df = pd.DataFrame(results)
-    try:
         
-        with engine.connect() as conn:
-            from sqlalchemy import text
+        base_dir = os.path.dirname(__file__) or os.getcwd()
+        preferred_names = [
+            "Vikriti_data - Form Responses 1.csv",
+            "vikriti_data.csv",
+        ]
+        csv_path = None
+        for name in preferred_names:
+            candidate = os.path.join(base_dir, name)
+            if os.path.exists(candidate):
+                csv_path = candidate
+                break
+
+        if csv_path is None:
+            raise FileNotFoundError(
+                "No GOOGLE_SHEET_URL provided and could not find a local CSV."
+            )
+        print(f"Loading local data from: {csv_path}")
+        df = pd.read_csv(csv_path)
+
+    id_col, questions = identify_columns(df)
+    results = []
+
+    for _, row in df.iterrows():
+        vata_w  = 0.0
+        pitta_w = 0.0
+        kapha_w = 0.0
+
+        for col, weight in questions:
+            raw = str(row[col]).strip()
+            if not raw or raw.lower() == "nan":
+                continue
+
+            
+            m = re.match(r'^[\s\(\[]*([ABC])[.\)\]\s,:]', raw.upper())
+            if not m:
+                
+                m = re.match(r'^[\s]*([ABC])\s*$', raw.upper())
+            if not m:
+                continue
+            answer = m.group(1)
+
+            if answer == "A":
+                vata_w  += weight
+            elif answer == "B":
+                pitta_w += weight
+            elif answer == "C":
+                kapha_w += weight
+
+        total = vata_w + pitta_w + kapha_w
+        if total == 0:
+            continue
+
+        vata_score  = vata_w  / total
+        pitta_score = pitta_w / total
+        kapha_score = kapha_w / total
+
+        scores = {"Vata": vata_score, "Pitta": pitta_score, "Kapha": kapha_score}
+        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        dominant        = sorted_scores[0][0]
+        dominant_score  = sorted_scores[0][1]
+        second_score    = sorted_scores[1][1]
+
+        severity        = classify_severity(dominant_score)
+        mixed_imbalance = detect_mixed_imbalance(vata_score, pitta_score, kapha_score)
+        confidence      = compute_confidence(dominant_score, second_score)
+        confidence_label = "Low" if confidence < LOW_CONFIDENCE_THRESHOLD else (
+                           "High" if confidence >= 0.70 else "Moderate")
+
+        
+        if mixed_imbalance:
+            vikriti_type = f"{mixed_imbalance} Vikriti"
+        else:
+            vikriti_type = f"{dominant} Vikriti"
+
+        results.append({
+            "name":             row[id_col],
+            "vata_score":       round(vata_score,  3),
+            "pitta_score":      round(pitta_score, 3),
+            "kapha_score":      round(kapha_score, 3),
+            "dominant":         dominant,
+            "severity":         severity,
+            "mixed_imbalance":  mixed_imbalance if mixed_imbalance else "None",
+            "confidence":       confidence,
+            "confidence_label": confidence_label,
+            "vikriti_type":     vikriti_type,
+            "created_at":       datetime.now(timezone.utc),
+        })
+
+    if not results:
+        print("No valid responses found in CSV — nothing to save.")
+    else:
+        results_df = pd.DataFrame(results)
+        try:
             existing = set()
             try:
-                rows = conn.execute(text("SELECT name FROM vikriti_results")).fetchall()
-                existing = {r[0] for r in rows}
+                cursor = collection.find({}, {"name": 1, "_id":0})
+                existing = {doc["name"] for doc in cursor if"name" in doc}
             except Exception:
                 pass  
-        before = len(results_df)
-        results_df = results_df[~results_df["name"].isin(existing)]
-        skipped = before - len(results_df)
-        if skipped:
-            print(f"Skipped {skipped} already-stored record(s).")
-        if results_df.empty:
-            print("All records already exist in the database — nothing new to save.")
-        else:
-            results_df.to_sql("vikriti_results", engine, if_exists="append", index=False)
-            print(f"Vikriti calculation completed. {len(results_df)} new record(s) saved.\n")
-    except Exception as exc:
-        print("Failed to write results to database:", exc)
-        raise
-print("=" * 75)
-print(f"{'Name':<35} {'Vikriti Type':<22} {'Severity':<12} {'Confidence'}")
-print("-" * 75)
-for record in results:
-    print(
-        f"{record['name']:<35} "
-        f"{record['vikriti_type']:<22} "
-        f"{record['severity']:<12} "
-        f"{record['confidence_label']} ({record['confidence']})"
-    )
-print("=" * 75)
+            before = len(results_df)
+            results_df = results_df[~results_df["name"].isin(existing)]
+            skipped = before - len(results_df)
+            if skipped:
+                print(f"Skipped {skipped} already-stored record(s).")
+            if results_df.empty:
+                print("All records already exist in the database — nothing new to save.")
+            else:
+                new_records = results_df.to_dict(orient="records")
+                if new_records:
+                    collection.insert_many(new_records)
+                print(f"Vikriti calculation completed. {len(results_df)} new record(s) saved.\n")
+        except Exception as exc:
+            print("Failed to write results to database:", exc)
+            raise
+    
+    return results
+
+if __name__ == "__main__":
+    results = run_analysis()
+    if results:
+        print("=" * 75)
+        print(f"{'Name':<35} {'Vikriti Type':<22} {'Severity':<12} {'Confidence'}")
+        print("-" * 75)
+        for record in results:
+            print(
+                f"{record['name']:<35} "
+                f"{record['vikriti_type']:<22} "
+                f"{record['severity']:<12} "
+                f"{record['confidence_label']} ({record['confidence']})"
+            )
+        print("=" * 75)
+
 
