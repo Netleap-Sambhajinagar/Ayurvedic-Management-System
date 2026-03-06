@@ -117,6 +117,18 @@ const patientSchema = new mongoose.Schema(
         "Stable but slow",
       ],
     },
+
+    // ── Vikriti Analysis (populated by Python backend.py) ──────────────────
+    vikritiType: {
+      type: String,
+      default: null,
+    },
+
+    severity: {
+      type: String,
+      enum: ["Sthula", "Madhyama", "Sukshma", null],
+      default: null,
+    },
   },
   { timestamps: true },
 );

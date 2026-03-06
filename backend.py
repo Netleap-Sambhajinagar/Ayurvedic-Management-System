@@ -111,11 +111,12 @@ def compute_confidence(dominant_score: float, second_score: float) -> float:
 
 
 
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTnsJo1kvnQ46conDKuzx4pGo2RFymXKKBDCg6ZrozrNt3JxDLpHuEhNAACZsTd5wAYk5Qf8PQOiMsf/pub?output=csv" 
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTnsJo1kvnQ46conDKuzx4pGo2RFymXKKBDCg6ZrozrNt3JxDLpHuEhNAACZsTd5wAYk5Qf8PQOiMsf/pub?output=csv"
 
-client = MongoClient("mongodb://localhost:27017/")
-db = client["vikriti_database"]
-collection = db["vikriti_results"]
+client     = MongoClient("mongodb://localhost:27017/")
+db         = client["ayurveda"]          # shared DB with the Node.js backend
+collection = db["vikriti_results"]       # audit / history collection
+patients   = db["patients"]             # main patients collection (Node.js)
 
 
 def run_analysis():
@@ -200,7 +201,7 @@ def run_analysis():
             vikriti_type = f"{dominant} Vikriti"
 
         results.append({
-            "name":             row[id_col],
+            "email":            row[id_col].strip().lower(),   # email is the identifier
             "vata_score":       round(vata_score,  3),
             "pitta_score":      round(pitta_score, 3),
             "kapha_score":      round(kapha_score, 3),
@@ -218,24 +219,39 @@ def run_analysis():
     else:
         results_df = pd.DataFrame(results)
         try:
+            # ── 1. Audit log: save to vikriti_results (skip duplicates by email) ──
             existing = set()
             try:
-                cursor = collection.find({}, {"name": 1, "_id":0})
-                existing = {doc["name"] for doc in cursor if"name" in doc}
+                cursor = collection.find({}, {"email": 1, "_id": 0})
+                existing = {doc["email"] for doc in cursor if "email" in doc}
             except Exception:
-                pass  
+                pass
             before = len(results_df)
-            results_df = results_df[~results_df["name"].isin(existing)]
-            skipped = before - len(results_df)
+            new_df = results_df[~results_df["email"].isin(existing)]
+            skipped = before - len(new_df)
             if skipped:
-                print(f"Skipped {skipped} already-stored record(s).")
-            if results_df.empty:
-                print("All records already exist in the database — nothing new to save.")
+                print(f"Skipped {skipped} already-stored audit record(s).")
+            if new_df.empty:
+                print("All audit records already exist — nothing new to audit-log.")
             else:
-                new_records = results_df.to_dict(orient="records")
-                if new_records:
-                    collection.insert_many(new_records)
-                print(f"Vikriti calculation completed. {len(results_df)} new record(s) saved.\n")
+                collection.insert_many(new_df.to_dict(orient="records"))
+                print(f"Audit log: {len(new_df)} new record(s) saved.")
+
+            # ── 2. Patch patients collection with vikritiType + severity ──────────
+            updated = 0
+            for record in results:
+                res = patients.update_one(
+                    {"email": record["email"]},
+                    {"$set": {
+                        "vikritiType": record["vikriti_type"],
+                        "severity":    record["severity"],
+                    }},
+                    upsert=False,   # only update existing patients
+                )
+                if res.matched_count:
+                    updated += 1
+            print(f"Patients updated with Vikriti results: {updated}/{len(results)}\n")
+
         except Exception as exc:
             print("Failed to write results to database:", exc)
             raise
@@ -246,11 +262,11 @@ if __name__ == "__main__":
     results = run_analysis()
     if results:
         print("=" * 75)
-        print(f"{'Name':<35} {'Vikriti Type':<22} {'Severity':<12} {'Confidence'}")
+        print(f"{'Email':<35} {'Vikriti Type':<22} {'Severity':<12} {'Confidence'}")
         print("-" * 75)
         for record in results:
             print(
-                f"{record['name']:<35} "
+                f"{record['email']:<35} "
                 f"{record['vikriti_type']:<22} "
                 f"{record['severity']:<12} "
                 f"{record['confidence_label']} ({record['confidence']})"
