@@ -1,0 +1,7 @@
+pandas
+pymongo
+datetime
+fastapi
+uvicorn
+python-multipart
+requests
