@@ -36,10 +36,10 @@ const Doctor = require("../models/Doctor");
 // GET doctor by email
 router.get("/doctor", async (req, res) => {
   try {
-    const { email } = req.query; // fetch email from query
+    const { email } = req.query;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const doctor = await Doctor.findOne({ email });
+    const doctor = await Doctor.findOne({ where: { email } });
     if (!doctor) return res.status(404).json({ error: "Doctor not found" });
 
     res.json(doctor);
@@ -55,9 +55,8 @@ router.put("/doctor", async (req, res) => {
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const updatedDoctor = await Doctor.findOneAndUpdate({ email }, req.body, {
-      new: true,
-    });
+    await Doctor.update(req.body, { where: { email } });
+    const updatedDoctor = await Doctor.findOne({ where: { email } });
 
     if (!updatedDoctor)
       return res.status(404).json({ error: "Doctor not found" });

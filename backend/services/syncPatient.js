@@ -103,11 +103,7 @@ async function syncPatient() {
         if (updateData[key] === null) delete updateData[key];
       });
 
-      await Patient.findOneAndUpdate(
-        { email },
-        { $set: updateData },
-        { upsert: true, new: true }
-      );
+      await Patient.upsert({ email, ...updateData });
 
       console.log(`✅ Synced: ${email}`);
     }

@@ -10,20 +10,24 @@ router.post("/google-form-webhook", async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // Duplicate check by email
-    const existing = await Patient.findOne({ email: req.body.email });
-
-    if (existing) {
-      return res.status(400).json({ message: "Patient already exists" });
+    const email = req.body.email?.toLowerCase().trim();
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
     }
 
-    const patient = new Patient(req.body);
-    await patient.save();
+    // Upsert the patient data
+    const [patient, created] = await Patient.upsert({
+      ...req.body,
+      email: email
+    });
 
-    res.status(200).json({ message: "Patient saved successfully" });
+    res.status(200).json({
+      message: created ? "Patient created successfully" : "Patient updated successfully",
+      patient
+    });
   } catch (error) {
     console.error("Error saving patient:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
