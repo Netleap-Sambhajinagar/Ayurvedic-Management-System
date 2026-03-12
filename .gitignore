@@ -14,3 +14,20 @@ ENV/
 # IDE
 .vscode/
 .idea/
+
+# JavaScript & Node
+node_modules/
+.env
+backend/.env
+frontend/.env
+
+# Temporary / Custom Files
+frontend/public/data.csv
+frontend/public/Report/
+files.txt
+files_list.txt
+pbix_utf8.txt
+pbix_visuals.txt
+report_layout.json
+tmp.txt
+temp.csv
