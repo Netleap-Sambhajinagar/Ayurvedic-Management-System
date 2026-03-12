@@ -126,11 +126,7 @@ const Register = () => {
       alert(res.data.message); // ✅ FIXED
       navigate("/login");
     } catch (err) {
-      alert(
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        "Registration failed"
-      );
+      alert(err.response?.data || "Registration failed");
     }
   };
 

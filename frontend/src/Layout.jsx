@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
-// import patientsData from "./utils/patientData"; // ❌ Removed
+import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import PatientData from "./components/PatientData";
 import AppointmentData from "./components/AppointmentData";
 import Dashboard from "./components/Dashboard";
@@ -10,75 +9,41 @@ import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PatientDetails from "./components/PatientDetails";
 import EditDoctor from "./components/EditDoctor";
+import HistoryData from "./components/HistoryData";
 
 const Layout = () => {
   const [activeNav, setActiveNav] = useState("Dashboard");
   const location = useLocation();
-
   const token = localStorage.getItem("token");
-
-  // Pages where sidebar should NOT appear
   const hideSidebarRoutes = ["/login", "/register"];
   const hideSidebar = hideSidebarRoutes.includes(location.pathname);
 
   return (
     <div className="flex min-h-screen font-sans bg-gray-50">
-      {/* Sidebar only if logged in and not on login/register */}
       {token && !hideSidebar && (
         <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} />
       )}
-
       <div className="flex-1">
         <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
+
+          {/* Public */}
+          <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Protected Routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+          {/* Protected */}
+          <Route path="/dashboard"   element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/doctor/edit" element={<ProtectedRoute><EditDoctor /></ProtectedRoute>} />
 
-          <Route
-            path="/doctor/edit"
-            element={
-              <ProtectedRoute>
-                <EditDoctor />
-              </ProtectedRoute>
-            }
-          />
+          {/* Appointments group */}
+          <Route path="/appointment" element={<ProtectedRoute><AppointmentData viewType="appointments" /></ProtectedRoute>} />
+          <Route path="/followups"   element={<ProtectedRoute><AppointmentData viewType="followups" /></ProtectedRoute>} />
+          <Route path="/opd"         element={<ProtectedRoute><AppointmentData viewType="opd" /></ProtectedRoute>} />
+          <Route path="/history"     element={<ProtectedRoute><HistoryData /></ProtectedRoute>} />
 
-          <Route
-            path="/appointment"
-            element={
-              <ProtectedRoute>
-                <AppointmentData />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/patient"
-            element={
-              <ProtectedRoute>
-                <PatientData /> {/* ✅ Removed prop */}
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/patient/:id"
-            element={
-              <ProtectedRoute>
-                <PatientDetails />
-              </ProtectedRoute>
-            }
-          />
+          {/* Patients */}
+          <Route path="/patient"     element={<ProtectedRoute><PatientData /></ProtectedRoute>} />
+          <Route path="/patient/:id" element={<ProtectedRoute><PatientDetails /></ProtectedRoute>} />
         </Routes>
       </div>
     </div>

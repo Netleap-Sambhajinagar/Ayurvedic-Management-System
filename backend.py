@@ -9,7 +9,7 @@ import mysql.connector
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "INSERT_YOUR_PASSWORD",
+    "password": "",
     "database": "ayurveda"
 }
 

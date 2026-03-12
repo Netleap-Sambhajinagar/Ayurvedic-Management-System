@@ -2,46 +2,206 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
-const reportText =
-  "The patient's vital signs are within normal limits. Body temperature and blood pressure are stable. Sleep duration is adequate, and digestion appears normal. No critical concerns detected at this time. Routine monitoring and healthy lifestyle maintenance are recommended.";
+const BASE = "http://localhost:5000/api/patients";
 
+// ── Enum options (must match Sequelize model) ─────────────────────────────────
+const ENUM_OPTS = {
+  bodyBuild: [
+    "Thin, difficulty gaining weight",
+    "Medium build, muscular",
+    "Broad, easily gains weight",
+  ],
+  skinType: [
+    "Dry, rough, cold",
+    "Warm, sensitive, prone to redness/acne",
+    "Soft, thick, oily",
+  ],
+  digestion: [
+    "Irregular, bloating/gas common",
+    "Strong but prone to acidity",
+    "Slow, heavy after meals",
+  ],
+  hungerPattern: [
+    "Variable, sometimes forget to eat",
+    "Strong and sharp, get irritated if hungry",
+    "Mild and stable",
+  ],
+  sleepPattern: [
+    "Light, easily disturbed",
+    "Moderate, may wake once",
+    "Deep and long",
+  ],
+  bowelMovements: [
+    "Dry, hard, constipated",
+    "Loose or frequent",
+    "Regular but slow",
+  ],
+  stressResponse: [
+    "Feel anxious or fearful",
+    "Become irritable or angry",
+    "Withdraw or feel dull",
+  ],
+  energyLevel: [
+    "Fluctuating, comes in bursts",
+    "Strong but can burn out",
+    "Stable but slow",
+  ],
+  severity: ["Sthula", "Madhyama", "Sukshma"],
+};
+
+const HEALTH_FIELDS = [
+  { label: "Body Build", key: "bodyBuild" },
+  { label: "Skin Type", key: "skinType" },
+  { label: "Digestion", key: "digestion" },
+  { label: "Hunger Pattern", key: "hungerPattern" },
+  { label: "Sleep Pattern", key: "sleepPattern" },
+  { label: "Bowel Movements", key: "bowelMovements" },
+  { label: "Stress Response", key: "stressResponse" },
+  { label: "Energy Level", key: "energyLevel" },
+];
+
+const Badge = ({ label, color = "green" }) => {
+  const map = {
+    green: "bg-green-100 text-green-700",
+    amber: "bg-amber-100 text-amber-700",
+    gray: "bg-gray-100 text-gray-500",
+    red: "bg-red-100 text-red-600",
+  };
+  return (
+    <span
+      className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[color]}`}
+    >
+      {label}
+    </span>
+  );
+};
+
+// ── Visit History Row ─────────────────────────────────────────────────────────
+const VisitRow = ({ visit, index, onCancel }) => {
+  const fmt = (d) =>
+    d
+      ? new Date(d).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : "—";
+  const typeColors = { appointment: "green", followup: "amber", opd: "gray" };
+  const statusColors = { completed: "green", pending: "amber", missed: "red" };
+  const canCancel = visit.status === "pending";
+  return (
+    <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
+      <td className="py-2.5 px-4 text-xs text-gray-400">{index + 1}</td>
+      <td className="py-2.5 px-4">
+        <Badge
+          label={visit.visitType}
+          color={typeColors[visit.visitType] || "gray"}
+        />
+      </td>
+      <td className="py-2.5 px-4 text-sm text-gray-700">
+        {fmt(visit.visitDate)}
+      </td>
+      <td className="py-2.5 px-4">
+        <Badge
+          label={visit.status}
+          color={statusColors[visit.status] || "gray"}
+        />
+      </td>
+      <td className="py-2.5 px-4 text-xs text-gray-500 max-w-[160px] truncate">
+        {visit.report || visit.notes || "—"}
+      </td>
+      <td className="py-2.5 px-4">
+        {canCancel && (
+          <button
+            onClick={() => onCancel(visit)}
+            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition font-medium border border-red-100"
+          >
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            Cancel
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 const PatientDetails = () => {
-  const [approved, setApproved] = useState(true);
-  const [followUp, setFollowUp] = useState("No");
-  const [exported, setExported] = useState(false);
-
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const [patientData, setPatientData] = useState(null);
+  const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Edit modal
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editSection, setEditSection] = useState("basic"); // "basic" | "health"
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
 
-  const navigator = useNavigate();
+  // Cancel visit
+  const [cancelVisit, setCancelVisit] = useState(null); // visit object
+  const [cancellingV, setCancellingV] = useState(false);
+
+  // Report section
+  const [approved, setApproved] = useState(true);
+  const [modifyMode, setModifyMode] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [followUp, setFollowUp] = useState("No");
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+  const fetchPatient = async () => {
+    try {
+      const res = await axios.get(`${BASE}/${id}`);
+      setPatientData(res.data);
+      setReportText(
+        res.data.aiReport ||
+          "The patient's vital signs are within normal limits. Body temperature and blood pressure are stable. Sleep duration is adequate, and digestion appears normal. No critical concerns detected at this time. Routine monitoring and healthy lifestyle maintenance are recommended.",
+      );
+      setFollowUp(res.data.followupDuration || "No");
+      setApproved(res.data.treatmentApproved ?? true);
+    } catch (err) {
+      console.error("Failed to load patient", err);
+    }
+  };
+
+  const fetchVisits = async () => {
+    try {
+      const res = await axios.get(`${BASE}/${id}/visits`);
+      setVisits(res.data);
+    } catch (err) {
+      console.error("Failed to load visits", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchPatientData = async () => {
-      try {
-        const res = await axios.get(`http://localhost:5000/api/patients/${id}`);
-        setPatientData(res.data);
-      } catch (err) {
-        console.error("Failed to load patient", err);
-      } finally {
-        setLoading(false);
-      }
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchPatient(), fetchVisits()]);
+      setLoading(false);
     };
-    fetchPatientData();
+    init();
   }, [id]);
 
-  const handleEditOpen = () => {
-    setEditForm({
-      name: patientData.name || "",
-      age: patientData.age || "",
-      weight: patientData.weight || "",
-      height: patientData.height || "",
-      contactNo: patientData.contactNo || "",
-      email: patientData.email || "",
-    });
+  // ── Edit modal ────────────────────────────────────────────────────────────
+  const openEditModal = (section) => {
+    setEditSection(section);
+    setEditForm({ ...patientData });
     setShowEditModal(true);
   };
 
@@ -49,139 +209,151 @@ const PatientDetails = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await axios.put(`http://localhost:5000/api/patients/${id}`, editForm);
+      const res = await axios.put(`${BASE}/${id}`, editForm);
       setPatientData(res.data);
       setShowEditModal(false);
     } catch (err) {
-      console.error("Failed to save patient", err);
-      alert("Failed to save changes. Please try again.");
+      alert("Failed to save changes.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return <div className="p-8 text-center text-gray-500">Loading patient details...</div>;
-  }
+  // ── Cancel a single visit ─────────────────────────────────────────────────
+  const handleCancelVisit = async () => {
+    if (!cancelVisit) return;
+    setCancellingV(true);
+    try {
+      await axios.patch(
+        `http://localhost:5000/api/patients/visits/${cancelVisit.id}/cancel`,
+      );
+      setCancelVisit(null);
+      await Promise.all([fetchPatient(), fetchVisits()]);
+    } catch (err) {
+      alert("Failed to cancel visit. Please try again.");
+    } finally {
+      setCancellingV(false);
+    }
+  };
 
-  if (!patientData) {
-    return <div className="p-8 text-center text-red-500">Patient not found.</div>;
-  }
+  // ── Export report ─────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await axios.patch(`${BASE}/${id}/export`, {
+        followupDuration: followUp,
+        aiReport: reportText,
+        treatmentApproved: approved,
+      });
+      setPatientData(res.data);
+      setExported(true);
+      await fetchVisits();
+      setTimeout(() => setExported(false), 2500);
+    } catch (err) {
+      alert("Failed to export report.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
-  // Create Health details map from our patient Schema enums dynamically
-  const healthDetails = [
-    { label: "Skin Type", value: patientData.skinType || "N/A" },
-    { label: "Digestion", value: patientData.digestion || "N/A" },
-    { label: "Hunger", value: patientData.hungerPattern || "N/A" },
-    { label: "Sleep", value: patientData.sleepPattern || "N/A" },
-    { label: "Bowel Movements", value: patientData.bowelMovements || "N/A" },
-    { label: "Stress Response", value: patientData.stressResponse || "N/A" },
-    { label: "Energy Level", value: patientData.energyLevel || "N/A" },
-    { label: "Body Build", value: patientData.bodyBuild || "N/A" },
-  ];
+  // ── Guards ────────────────────────────────────────────────────────────────
+  if (loading)
+    return (
+      <div className="p-8 text-center text-gray-400">
+        Loading patient details…
+      </div>
+    );
+  if (!patientData)
+    return (
+      <div className="p-8 text-center text-red-500">Patient not found.</div>
+    );
+
+  const p = patientData;
+  const fmt = (d) =>
+    d
+      ? new Date(d).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : "—";
 
   return (
     <div
-      className="flex-1 min-h-screen mt-10 "
+      className="flex-1 min-h-screen bg-gray-50"
       style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}
     >
       {/* Top Nav */}
-      <div className="bg-white px-8 py-3 flex items-center justify-between ">
+      <div className="bg-white px-8 py-3 flex items-center justify-between border-b border-gray-100">
         <nav className="flex items-center gap-1 text-sm text-gray-500">
           <span
-            className=" cursor-pointer transition-colors"
-            onClick={() => navigator("/patient")}
+            className="cursor-pointer hover:text-green-600 transition"
+            onClick={() => navigate("/patient")}
           >
             Patients
           </span>
-          <span className="text-gray-300 mx-1">&gt;</span>
-          <span className="transition-colors">Patient Details</span>
-          <span className="text-gray-300 mx-1">&gt;</span>
-          <span className="font-semibold text-gray-800">{patientData.name}</span>
+          <span className="text-gray-300 mx-1">›</span>
+          <span
+            className="cursor-pointer hover:text-green-600 transition"
+            onClick={() => navigate("/appointment")}
+          >
+            Appointments
+          </span>
+          <span className="text-gray-300 mx-1">›</span>
+          <span className="font-semibold text-gray-800">{p.name}</span>
         </nav>
-        <div className="flex items-center gap-4">
-          <button className="text-gray-500 p-1.5 rounded-[5px] bg-gray-200">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-4.35-4.35M16.65 16.65A7 7 0 1 0 4.35 4.35a7 7 0 0 0 12.3 12.3z"
-              />
-            </svg>
-          </button>
-          <button className="text-gray-500 p-1.5  rounded-[5px] bg-gray-200">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a1 1 0 0 1-.293.707L13 13.414V19a1 1 0 0 1-.553.894l-4-2A1 1 0 0 1 8 17v-3.586L3.293 6.707A1 1 0 0 1 3 6V4z"
-              />
-            </svg>
-          </button>
+        {/* Status badges */}
+        <div className="flex items-center gap-2">
+          {p.isAppointed === "yes" && <Badge label="Appointed" color="green" />}
+          {p.isOpd === "yes" && <Badge label="OPD Done" color="green" />}
+          {p.isFollowup === "yes" && (
+            <Badge label={`Follow-up: ${fmt(p.followupDate)}`} color="amber" />
+          )}
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* Patient Overview */}
-        <section className="-ml-25">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">
-            Patient Overview
-          </h2>
-          <div className="bg-white rounded-2xl border border-gray-200  overflow-hidden">
+        {/* ── Patient Overview ─────────────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-800">
+              Patient Overview
+            </h2>
+            <button
+              onClick={() => openEditModal("basic")}
+              className="flex items-center gap-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-full px-3 py-1 bg-green-50 hover:bg-green-100 transition"
+            >
+              Edit Basic Info
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="flex flex-col sm:flex-row">
-              {/* Left: Avatar + Info */}
               <div className="flex items-start gap-4 p-5 sm:w-56">
-                <div className="w-12 h-12 rounded-full bg-linear-to-br from-green-300 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shrink-0 uppercase">
-                  {patientData.name ? patientData.name.charAt(0) : "?"}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-300 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shrink-0 uppercase">
+                  {p.name?.charAt(0) || "?"}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 leading-tight">
-                    {patientData.name}
-                  </p>
+                  <p className="font-semibold text-gray-900">{p.name}</p>
                   <p className="text-xs text-gray-400 mt-0.5 truncate">
-                    {patientData.email}
+                    {p.email}
                   </p>
-                  <button onClick={handleEditOpen} className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-full px-3 py-1 bg-green-50 hover:bg-green-100 transition-colors">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="w-3 h-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2.5}
-                        d="M15.232 5.232l3.536 3.536M9 13l6-6m0 0l-3-3M3 21h4l10-10.5L13 7 3 17v4z"
-                      />
-                    </svg>
-                    Edit profile
-                  </button>
+                  {p.vikritiType && (
+                    <Badge label={`Dosha: ${p.vikritiType}`} color="green" />
+                  )}
+                  {p.severity && (
+                    <span className="text-xs text-gray-400 ml-1">
+                      {p.severity}
+                    </span>
+                  )}
                 </div>
               </div>
-
-              {/* Right: Stats */}
               <div className="flex flex-wrap flex-1">
                 {[
-                  { label: "Age", value: `${patientData.age} years` },
-                  { label: "Height", value: `${patientData.height} cm` },
-                  { label: "Weight", value: `${patientData.weight} Kg` },
-                  { label: "Contact", value: patientData.contactNo },
+                  { label: "Age", value: `${p.age} yrs` },
+                  { label: "Height", value: `${p.height} cm` },
+                  { label: "Weight", value: `${p.weight} kg` },
+                  { label: "Contact", value: p.contactNo },
+                  { label: "Registered", value: fmt(p.createdAt) },
                 ].map((item) => (
                   <div
                     key={item.label}
@@ -198,21 +370,27 @@ const PatientDetails = () => {
           </div>
         </section>
 
-        {/* Health Details */}
-        <section className="-ml-25">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">
-            Health Details
-          </h2>
-          <div className="bg-white rounded-2xl border border-gray-200  p-5">
+        {/* ── Health Details ───────────────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-800">Health Details</h2>
+            <button
+              onClick={() => openEditModal("health")}
+              className="flex items-center gap-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-full px-3 py-1 bg-green-50 hover:bg-green-100 transition"
+            >
+              Edit Health Info
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {healthDetails.map((item) => (
+              {HEALTH_FIELDS.map(({ label, key }) => (
                 <div
-                  key={item.label}
-                  className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:border-green-200 hover:bg-green-50 transition-all duration-200"
+                  key={key}
+                  className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:border-green-200 hover:bg-green-50 transition-all"
                 >
-                  <p className="text-xs text-gray-400 mb-1">{item.label}</p>
+                  <p className="text-xs text-gray-400 mb-1">{label}</p>
                   <p className="font-semibold text-gray-800 text-sm">
-                    {item.value}
+                    {p[key] || "N/A"}
                   </p>
                 </div>
               ))}
@@ -220,40 +398,84 @@ const PatientDetails = () => {
           </div>
         </section>
 
-        {/* Generated Report */}
-        <section className="-ml-25">
+        {/* ── Visit History ────────────────────────────────────────────────── */}
+        <section>
+          <h2 className="text-lg font-bold text-gray-800 mb-3">
+            Visit History
+          </h2>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {visits.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 text-sm">
+                No visits recorded yet.
+              </div>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    {["#", "Type", "Date", "Status", "Notes", ""].map((h) => (
+                      <th
+                        key={h}
+                        className="py-3 px-4 text-xs text-gray-500 font-semibold"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visits.map((v, i) => (
+                    <VisitRow
+                      key={v.id}
+                      visit={v}
+                      index={i}
+                      onCancel={(visit) => setCancelVisit(visit)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        {/* ── Generated Report ─────────────────────────────────────────────── */}
+        <section>
           <h2 className="text-lg font-bold text-gray-800 mb-1">
             Generated Report
           </h2>
           <p className="text-xs text-gray-400 mb-3">
-            Based on recorded vitals and observations, the patient's overall
-            health condition appears stable. No critical indicators detected.
+            AI-generated based on patient vitals and dosha analysis.
           </p>
-          <div className="bg-white rounded-2xl border border-gray-200  p-5 space-y-5">
-            {/* Report Text */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5 shadow-sm">
+            {/* Report text — view or edit mode */}
             <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {reportText}
-              </p>
+              {modifyMode ? (
+                <textarea
+                  value={reportText}
+                  onChange={(e) => setReportText(e.target.value)}
+                  rows={6}
+                  className="w-full text-sm text-gray-700 leading-relaxed bg-transparent outline-none resize-none"
+                  placeholder="Edit AI-generated report here…"
+                />
+              ) : (
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {reportText}
+                </p>
+              )}
             </div>
 
-            {/* Actions Row */}
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-              {/* Left: Approve / Modify */}
               <div className="flex flex-col gap-3 flex-1">
+                {/* Approve / Modify Treatment */}
                 <div className="flex items-center gap-6">
                   <button
-                    onClick={() => setApproved(true)}
-                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${approved
-                      ? "text-green-600"
-                      : "text-gray-400 hover:text-gray-600"
-                      }`}
+                    onClick={() => {
+                      setApproved(true);
+                      setModifyMode(false);
+                    }}
+                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${approved ? "text-green-600" : "text-gray-400 hover:text-gray-600"}`}
                   >
                     <span
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${approved
-                        ? "border-green-500 bg-green-500"
-                        : "border-gray-300"
-                        }`}
+                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${approved ? "border-green-500 bg-green-500" : "border-gray-300"}`}
                     >
                       {approved && (
                         <svg
@@ -273,19 +495,15 @@ const PatientDetails = () => {
                     </span>
                     Approve Treatment
                   </button>
-
                   <button
-                    onClick={() => setApproved(false)}
-                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${!approved
-                      ? "text-amber-500"
-                      : "text-gray-400 hover:text-gray-600"
-                      }`}
+                    onClick={() => {
+                      setApproved(false);
+                      setModifyMode(true);
+                    }}
+                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${!approved ? "text-amber-500" : "text-gray-400 hover:text-gray-600"}`}
                   >
                     <span
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${!approved
-                        ? "border-amber-400 bg-amber-400"
-                        : "border-gray-300"
-                        }`}
+                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${!approved ? "border-amber-400 bg-amber-400" : "border-gray-300"}`}
                     >
                       {!approved && (
                         <svg
@@ -297,7 +515,7 @@ const PatientDetails = () => {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth={3}
+                            strokeWidth={2.5}
                             d="M15.232 5.232l3.536 3.536M9 13l6-6"
                           />
                         </svg>
@@ -306,31 +524,31 @@ const PatientDetails = () => {
                     Modify Treatment
                   </button>
                 </div>
+                {modifyMode && (
+                  <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-100">
+                    Editing report above. Changes will be saved when you click{" "}
+                    <strong>Export Report</strong>.
+                  </p>
+                )}
 
-                {/* Follow Up Card */}
-                <div className="inline-flex flex-col bg-white rounded-xl border border-gray-200  px-4 py-3 w-fit">
+                {/* Follow Up */}
+                <div className="inline-flex flex-col bg-white rounded-xl border border-gray-200 px-4 py-3 w-fit shadow-sm">
                   <p className="text-xs font-semibold text-gray-600 mb-2">
                     Follow up?
                   </p>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex gap-3">
                     {["No", "7 Days", "15 Days"].map((opt) => (
                       <label
                         key={opt}
-                        className="flex items-center gap-2 cursor-pointer group"
+                        className="flex items-center gap-1.5 cursor-pointer group"
                       >
                         <span
                           onClick={() => setFollowUp(opt)}
-                          className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 transition-all cursor-pointer ${followUp === opt
-                            ? "border-green-500 bg-green-500"
-                            : "border-gray-300 group-hover:border-green-300"
-                            }`}
+                          className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 transition-all cursor-pointer ${followUp === opt ? "border-green-500 bg-green-500" : "border-gray-300 group-hover:border-green-300"}`}
                         />
                         <span
                           onClick={() => setFollowUp(opt)}
-                          className={`text-xs transition-colors ${followUp === opt
-                            ? "text-gray-800 font-medium"
-                            : "text-gray-500"
-                            }`}
+                          className={`text-xs transition-colors ${followUp === opt ? "text-gray-800 font-medium" : "text-gray-500"}`}
                         >
                           {opt}
                         </span>
@@ -341,93 +559,171 @@ const PatientDetails = () => {
               </div>
 
               {/* Export Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={() => {
-                    setExported(true);
-                    setTimeout(() => setExported(false), 2000);
-                  }}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold  transition-all duration-200 ${exported
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  exported
                     ? "bg-green-600 text-white scale-95"
                     : "bg-green-500 hover:bg-green-600 text-white"
-                    }`}
-                >
-                  {exported ? (
-                    <>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2.5}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      Exported!
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1M12 12V4m0 8l-3-3m3 3l3-3"
-                        />
-                      </svg>
-                      Export Report
-                    </>
-                  )}
-                </button>
-              </div>
+                } disabled:opacity-60`}
+              >
+                {exported ? (
+                  <>
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2.5}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>{" "}
+                    Exported!
+                  </>
+                ) : exporting ? (
+                  "Saving…"
+                ) : (
+                  <>
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 8l-3-3m3 3l3-3"
+                      />
+                    </svg>{" "}
+                    Export Report
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </section>
       </div>
 
-      {/* Edit Patient Modal */}
+      {/* ── Edit Modal ─────────────────────────────────────────────────────── */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-800">Edit Patient Profile</h2>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">
+                {editSection === "basic"
+                  ? "Edit Basic Info"
+                  : "Edit Health Details"}
+              </h2>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-gray-400 hover:text-gray-600 text-xl"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              {[
-                { label: "Full Name", key: "name", type: "text" },
-                { label: "Email", key: "email", type: "email" },
-                { label: "Age", key: "age", type: "number" },
-                { label: "Height (cm)", key: "height", type: "number" },
-                { label: "Weight (kg)", key: "weight", type: "number" },
-                { label: "Contact Number", key: "contactNo", type: "text" },
-              ].map(({ label, key, type }) => (
-                <div key={key}>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
-                  <input
-                    type={type}
-                    value={editForm[key] || ""}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-100 transition"
-                    required={key === "name" || key === "email"}
-                  />
-                </div>
-              ))}
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              {editSection === "basic" ? (
+                // ── Basic fields (text inputs) ──────────────────────────────
+                [
+                  { label: "Full Name", key: "name", type: "text" },
+                  { label: "Email", key: "email", type: "email" },
+                  { label: "Age", key: "age", type: "number" },
+                  { label: "Height (cm)", key: "height", type: "number" },
+                  { label: "Weight (kg)", key: "weight", type: "number" },
+                  { label: "Contact Number", key: "contactNo", type: "text" },
+                ].map(({ label, key, type }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      value={editForm[key] || ""}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
+                      }
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-100 transition"
+                    />
+                  </div>
+                ))
+              ) : (
+                // ── Health fields (dropdowns) ──────────────────────────────
+                <>
+                  {HEALTH_FIELDS.map(({ label, key }) => (
+                    <div key={key}>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">
+                        {label}
+                      </label>
+                      <select
+                        value={editForm[key] || ""}
+                        onChange={(e) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            [key]: e.target.value,
+                          }))
+                        }
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-100 transition bg-white"
+                      >
+                        {ENUM_OPTS[key]?.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      Severity
+                    </label>
+                    <select
+                      value={editForm.severity || ""}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          severity: e.target.value,
+                        }))
+                      }
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-green-400 bg-white"
+                    >
+                      <option value="">— Select —</option>
+                      {ENUM_OPTS.severity.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      Vikriti Type (Dosha)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Vata, Pitta, Kapha"
+                      value={editForm.vikritiType || ""}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          vikritiType: e.target.value,
+                        }))
+                      }
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-green-400 transition"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button
@@ -442,10 +738,77 @@ const PatientDetails = () => {
                   disabled={saving}
                   className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-60"
                 >
-                  {saving ? "Saving..." : "Save Changes"}
+                  {saving ? "Saving…" : "Save Changes"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ── Cancel Visit Modal ───────────────────────────────────────────── */}
+      {cancelVisit && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <svg
+                  className="w-5 h-5 text-red-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-800 capitalize">
+                  Cancel {cancelVisit.visitType}?
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  This will mark the visit as missed.
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              Are you sure you want to cancel the{" "}
+              <span className="font-semibold text-gray-800 capitalize">
+                {cancelVisit.visitType}
+              </span>{" "}
+              scheduled on{" "}
+              <span className="font-semibold text-gray-800">
+                {new Date(cancelVisit.visitDate).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              ?
+              {cancelVisit.visitType === "followup" && (
+                <span className="block mt-1 text-amber-600 text-xs">
+                  The follow-up will also be removed from the patient record.
+                </span>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCancelVisit(null)}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Keep it
+              </button>
+              <button
+                onClick={handleCancelVisit}
+                disabled={cancellingV}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-60"
+              >
+                {cancellingV ? "Cancelling…" : "Yes, Cancel"}
+              </button>
+            </div>
           </div>
         </div>
       )}

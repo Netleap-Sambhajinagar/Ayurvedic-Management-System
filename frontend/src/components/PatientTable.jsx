@@ -14,8 +14,9 @@ const PatientsTable = ({ patients }) => {
               {cols.map((col, index) => (
                 <th
                   key={col}
-                  className={`py-3 px-6 font-semibold text-center ${index === 0 ? "rounded-l-xl" : ""
-                    } ${index === cols.length - 1 ? "rounded-r-xl" : ""}`}
+                  className={`py-3 px-6 font-semibold text-center ${
+                    index === 0 ? "rounded-l-xl" : ""
+                  } ${index === cols.length - 1 ? "rounded-r-xl" : ""}`}
                 >
                   {col}
                 </th>
@@ -26,8 +27,8 @@ const PatientsTable = ({ patients }) => {
           <tbody>
             {patients.map((p, i) => (
               <tr
-                key={p._id}
-                onClick={() => navigate(`/patient/${p._id}`)}
+                key={p.id}
+                onClick={() => navigate(`/patient/${p.id}`)}
                 className="bg-white hover:bg-green-50 transition duration-200 text-center cursor-pointer"
               >
                 <td className="py-4 px-6">{i + 1}</td>
