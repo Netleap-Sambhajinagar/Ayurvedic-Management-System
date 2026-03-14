@@ -1,4 +1,3 @@
-import PatientDetails from "./PatientDetails";
 import { useNavigate } from "react-router-dom";
 
 const PatientsTable = ({ patients }) => {

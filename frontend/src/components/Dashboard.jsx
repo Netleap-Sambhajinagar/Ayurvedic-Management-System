@@ -6,7 +6,8 @@ import {
 } from "recharts";
 import { Filter, RotateCcw, ChevronDown, RefreshCw } from "lucide-react";
 
-const BASE = "http://localhost:5000/api/patients";
+import { PATIENTS_API } from "../config";
+const BASE = PATIENTS_API;
 const COLORS = ["#1b814c","#8a5840","#0ea5e9","#1d3557","#d97706","#6b21a8","#334155","#be185d"];
 const getColor = (i) => COLORS[i % COLORS.length];
 

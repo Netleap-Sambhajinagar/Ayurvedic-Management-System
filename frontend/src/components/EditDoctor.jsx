@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const BASE = "http://localhost:5000/api";
+import { DOCTOR_API } from "../config";
+const BASE = DOCTOR_API;
 
 const EditDoctor = () => {
   const navigate  = useNavigate();

@@ -224,6 +224,20 @@ router.patch("/visits/:visitId/cancel", async (req, res) => {
   }
 });
 
+// ── DELETE a specific visit record (appointment only, not patient) ────────────
+router.delete("/visits/:visitId", async (req, res) => {
+  try {
+    const visit = await PatientVisit.findByPk(req.params.visitId);
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
+
+    await visit.destroy();
+    res.json({ message: "Visit record deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete visit record" });
+  }
+});
+
 // ── PATCH export report ───────────────────────────────────────────────────────
 router.patch("/:id/export", async (req, res) => {
   const { followupDuration, aiReport, treatmentApproved } = req.body;

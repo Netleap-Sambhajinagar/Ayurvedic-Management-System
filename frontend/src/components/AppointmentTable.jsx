@@ -1,13 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { PATIENTS_API } from "../config";
 
 const AppointmentTable = ({ title, data }) => {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
 
   useEffect(() => {
-    axios.get("http://localhost:5000/api/patients").then((res) => {
+    axios.get(PATIENTS_API).then((res) => {
       setPatients(res.data);
     });
   }, []);

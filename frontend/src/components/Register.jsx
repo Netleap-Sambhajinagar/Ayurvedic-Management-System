@@ -20,7 +20,7 @@
 
 //     try {
 //       const res = await axios.post(
-//         "http://localhost:5000/api/auth/register",
+//         `${AUTH_API}/register`,
 //         form,
 //       );
 //       alert(res.data);
@@ -100,6 +100,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { AUTH_API } from "../config";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -120,7 +121,7 @@ const Register = () => {
 
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/auth/register",
+        `${AUTH_API}/register`,
         form,
       );
       alert(res.data.message); // ✅ FIXED

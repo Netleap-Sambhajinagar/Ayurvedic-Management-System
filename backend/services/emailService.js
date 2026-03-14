@@ -28,7 +28,6 @@ async function sendReportEmail(patient, visits) {
   const doctorName = process.env.DOCTOR_NAME || "Your Doctor";
   const clinicName = process.env.CLINIC_NAME || "Ayurveda Care";
 
-  // Build visit rows for the table
   const visitRows = visits
     .map(
       (v, i) => `
@@ -78,7 +77,7 @@ async function sendReportEmail(patient, visits) {
       <!-- Greeting -->
       <p style="font-size:15px; color:#374151; margin:0 0 6px;">Hi <strong>${patient.name}</strong>,</p>
       <p style="font-size:14px; color:#6b7280; margin:0 0 28px; line-height:1.6;">
-        Thank you for your visit. Please find your personalised Ayurvedic treatment report below. 
+        Thank you for your visit. Please find your personalised Ayurvedic treatment report below.
         Keep this for your records and refer to it before your next appointment.
       </p>
 
@@ -152,18 +151,6 @@ async function sendReportEmail(patient, visits) {
         <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:20px 24px;">
           <p style="font-size:13px; color:#6b7280; margin:0 0 14px;">AI-generated assessment based on Prakriti & Vikriti analysis:</p>
           <p style="font-size:14px; color:#374151; line-height:1.8; margin:0; white-space:pre-line;">${patient.aiReport || "Report not yet generated."}</p>
-        </div>
-      </div>
-
-      <!-- Medication Section (blank for doctor to fill) -->
-      <div style="margin:24px 0;">
-        <h2 style="margin:0 0 12px; font-size:15px; color:#111827; font-weight:700;">💊 Prescribed Medication & Recommendations</h2>
-        <div style="background:#fffbeb; border:1px dashed #f59e0b; border-radius:12px; padding:20px 24px; min-height:80px;">
-          <p style="font-size:12px; color:#92400e; margin:0 0 10px; font-style:italic;">To be filled by ${doctorName}:</p>
-          <div style="border-bottom:1px solid #fcd34d; margin:12px 0;"></div>
-          <div style="border-bottom:1px solid #fcd34d; margin:12px 0;"></div>
-          <div style="border-bottom:1px solid #fcd34d; margin:12px 0;"></div>
-          <div style="border-bottom:1px solid #fcd34d; margin:12px 0;"></div>
         </div>
       </div>
 

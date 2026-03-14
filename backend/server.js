@@ -4,7 +4,7 @@ const sequelize = require("./config/database");
 require("dotenv").config();
 
 const authRoutes = require("./routes/authRoutes");
-const doctorRoutes = require("./routes/docterRoutes");
+const doctorRoutes = require("./routes/doctorRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const webhookRoutes = require("./routes/googleWebhook");
 
@@ -13,7 +13,10 @@ require("./models/Patient");
 require("./models/PatientVisit");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true,
+}));
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
 require("./services/syncPatient");

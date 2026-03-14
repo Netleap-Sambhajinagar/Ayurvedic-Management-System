@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { AUTH_API } from "../config";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const Login = () => {
 
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/auth/login",
+        `${AUTH_API}/login`,
         form,
         {
           headers: { "Content-Type": "application/json" }, // important
@@ -40,7 +41,7 @@ const Login = () => {
       <div className="absolute w-72 h-72 bg-green-500 rounded-full opacity-20 blur-3xl bottom-10 right-10 animate-pulse"></div>
 
       {/* 🌱 Login Card */}
-      <div className="bg-white/80 backdrop-blur-lg shadow-2xl rounded-3xl p-10 w-[380px] border border-green-100 transform transition-all duration-700 hover:scale-105">
+      <div className="bg-white/80 backdrop-blur-lg shadow-2xl rounded-3xl p-10 w-[380px] border border-green-100">
         {/* Logo / Title */}
         <h2 className="text-3xl font-bold text-green-700 text-center mb-2 tracking-wide">
           Ayurveda Care

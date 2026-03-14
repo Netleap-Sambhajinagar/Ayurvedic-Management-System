@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-
-const BASE = "http://localhost:5000/api/patients";
+import Toast from "./Toast";
+import { PATIENTS_API } from "../config";
 
 const Badge = ({ label, color }) => {
   const colors = {
     green: "bg-green-100 text-green-700",
-    red: "bg-red-100 text-red-600",
-    gray: "bg-gray-100 text-gray-500",
+    red:   "bg-red-100 text-red-600",
+    gray:  "bg-gray-100 text-gray-500",
     amber: "bg-amber-100 text-amber-700",
   };
   return (
-    <span
-      className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[color] || colors.gray}`}
-    >
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[color] || colors.gray}`}>
       {label}
     </span>
   );
@@ -26,59 +24,36 @@ const CancelModal = ({ patient, type, onConfirm, onClose, loading }) => (
     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-          <svg
-            className="w-5 h-5 text-red-500"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-            />
+          <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
         </div>
         <div>
           <h3 className="text-base font-bold text-gray-800">
             Cancel {type === "appointment" ? "Appointment" : "Follow-up"}?
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            This action cannot be undone easily.
-          </p>
+          <p className="text-xs text-gray-500 mt-0.5">This action cannot be undone easily.</p>
         </div>
       </div>
       <p className="text-sm text-gray-600 mb-5">
-        Are you sure you want to cancel the{" "}
-        {type === "appointment" ? "appointment" : "follow-up"} for{" "}
+        Are you sure you want to cancel the {type === "appointment" ? "appointment" : "follow-up"} for{" "}
         <span className="font-semibold text-gray-800">{patient?.name}</span>?
         {type === "followup" && (
           <span className="block mt-1 text-amber-600 text-xs">
             Scheduled follow-up on{" "}
             {patient?.followupDate
-              ? new Date(patient.followupDate).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
+              ? new Date(patient.followupDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
               : "—"}{" "}
             will be removed.
           </span>
         )}
       </p>
       <div className="flex gap-3">
-        <button
-          onClick={onClose}
-          className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
-        >
+        <button onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
           Keep it
         </button>
-        <button
-          onClick={onConfirm}
-          disabled={loading}
-          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-60"
-        >
+        <button onClick={onConfirm} disabled={loading}
+          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-60">
           {loading ? "Cancelling…" : "Yes, Cancel"}
         </button>
       </div>
@@ -101,54 +76,38 @@ const SectionTable = ({ title, patients, columns, emptyMsg, loading }) => {
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
         ) : patients.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">
-            {emptyMsg}
-          </div>
+          <div className="p-8 text-center text-gray-400 text-sm">{emptyMsg}</div>
         ) : (
-          <table className="w-full text-sm text-left">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="py-3 px-4 text-gray-500 font-semibold text-xs">
-                  #
-                </th>
-                <th className="py-3 px-4 text-gray-500 font-semibold text-xs">
-                  Patient
-                </th>
-                {columns.map((c) => (
-                  <th
-                    key={c.key}
-                    className="py-3 px-4 text-gray-500 font-semibold text-xs"
-                  >
-                    {c.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {patients.map((p, i) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-gray-50 hover:bg-green-50 transition"
-                >
-                  <td className="py-3 px-4 text-gray-400 text-xs">{i + 1}</td>
-                  <td
-                    className="py-3 px-4 font-medium text-green-600 cursor-pointer hover:underline"
-                    onClick={() => navigate(`/patient/${p.id}`)}
-                  >
-                    <div>{p.name}</div>
-                    <div className="text-xs text-gray-400 font-normal">
-                      {p.contactNo}
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="py-3 px-4 text-gray-500 font-semibold text-xs">#</th>
+                  <th className="py-3 px-4 text-gray-500 font-semibold text-xs">Patient</th>
                   {columns.map((c) => (
-                    <td key={c.key} className="py-3 px-4">
-                      {c.render ? c.render(p) : (p[c.key] ?? "—")}
-                    </td>
+                    <th key={c.key} className="py-3 px-4 text-gray-500 font-semibold text-xs">{c.label}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {patients.map((p, i) => (
+                  <tr key={p.id} className="border-b border-gray-50 hover:bg-green-50 transition">
+                    <td className="py-3 px-4 text-gray-400 text-xs">{i + 1}</td>
+                    <td className="py-3 px-4 font-medium text-green-600 cursor-pointer hover:underline"
+                      onClick={() => navigate(`/patient/${p.id}`)}>
+                      <div>{p.name}</div>
+                      <div className="text-xs text-gray-400 font-normal">{p.contactNo}</div>
+                    </td>
+                    {columns.map((c) => (
+                      <td key={c.key} className="py-3 px-4">
+                        {c.render ? c.render(p) : (p[c.key] ?? "—")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -158,49 +117,53 @@ const SectionTable = ({ title, patients, columns, emptyMsg, loading }) => {
 // ── Main ──────────────────────────────────────────────────────────────────────
 const AppointmentData = ({ viewType = "appointments" }) => {
   const [appointments, setAppointments] = useState([]);
-  const [followups, setFollowups] = useState([]);
-  const [opd, setOpd] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [updating, setUpdating] = useState({});
+  const [followups,    setFollowups]    = useState([]);
+  const [opd,          setOpd]          = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [showSearch,   setShowSearch]   = useState(false);
+  const [updating,     setUpdating]     = useState({});
+  const [cancelModal,  setCancelModal]  = useState(null);
+  const [cancelling,   setCancelling]   = useState(false);
+  const [toast,        setToast]        = useState(null);
 
-  // Cancel modal state
-  const [cancelModal, setCancelModal] = useState(null);
-  // { patient, type: "appointment" | "followup" }
-  const [cancelling, setCancelling] = useState(false);
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
+  // Only fetch the endpoint(s) needed for this viewType
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, f, o] = await Promise.all([
-        axios.get(`${BASE}/appointments`),
-        axios.get(`${BASE}/followups`),
-        axios.get(`${BASE}/opd`),
-      ]);
-      setAppointments(a.data);
-      setFollowups(f.data);
-      setOpd(o.data);
+      if (viewType === "appointments") {
+        const res = await axios.get(`${PATIENTS_API}/appointments`);
+        setAppointments(res.data);
+      } else if (viewType === "followups") {
+        const res = await axios.get(`${PATIENTS_API}/followups`);
+        setFollowups(res.data);
+      } else if (viewType === "opd") {
+        const res = await axios.get(`${PATIENTS_API}/opd`);
+        setOpd(res.data);
+      }
     } catch (err) {
       console.error("Failed to load appointment data", err);
+      showToast("Failed to load data. Please refresh.", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewType]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const handleAppointed = async (patientId, value) => {
     setUpdating((u) => ({ ...u, [patientId]: true }));
     try {
-      await axios.patch(`${BASE}/${patientId}/appointed`, {
-        isAppointed: value,
-      });
+      await axios.patch(`${PATIENTS_API}/${patientId}/appointed`, { isAppointed: value });
       await fetchAll();
     } catch (err) {
       console.error(err);
+      showToast("Failed to update appointment status.", "error");
     } finally {
       setUpdating((u) => ({ ...u, [patientId]: false }));
     }
@@ -212,15 +175,16 @@ const AppointmentData = ({ viewType = "appointments" }) => {
     try {
       const { patient, type } = cancelModal;
       if (type === "appointment") {
-        await axios.patch(`${BASE}/${patient.id}/cancel-appointment`);
+        await axios.patch(`${PATIENTS_API}/${patient.id}/cancel-appointment`);
       } else {
-        await axios.patch(`${BASE}/${patient.id}/cancel-followup`);
+        await axios.patch(`${PATIENTS_API}/${patient.id}/cancel-followup`);
       }
       setCancelModal(null);
+      showToast(`${type === "appointment" ? "Appointment" : "Follow-up"} cancelled successfully.`);
       await fetchAll();
     } catch (err) {
       console.error(err);
-      alert("Failed to cancel. Please try again.");
+      showToast("Failed to cancel. Please try again.", "error");
     } finally {
       setCancelling(false);
     }
@@ -230,77 +194,32 @@ const AppointmentData = ({ viewType = "appointments" }) => {
     list.filter((p) => p.name?.toLowerCase().includes(search.toLowerCase()));
 
   const formatDate = (d) =>
-    d
-      ? new Date(d).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
-      : "—";
+    d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
   // ── Column definitions ────────────────────────────────────────────────────
   const apptCols = [
+    { key: "createdAt",   label: "Registered On", render: (p) => formatDate(p.createdAt) },
+    { key: "vikritiType", label: "Dosha",          render: (p) => p.vikritiType ? <Badge label={p.vikritiType} color="green" /> : <Badge label="Pending AI" color="gray" /> },
     {
-      key: "createdAt",
-      label: "Registered On",
-      render: (p) => formatDate(p.createdAt),
+      key: "isAppointed", label: "Entered Cabin?",
+      render: (p) => p.isAppointed === "yes" ? (
+        <Badge label="✓ Yes" color="green" />
+      ) : (
+        <div className="flex gap-1">
+          <button disabled={updating[p.id]} onClick={() => handleAppointed(p.id, "yes")}
+            className="text-xs px-3 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 transition disabled:opacity-50 font-semibold">Yes</button>
+          <button disabled={updating[p.id]} onClick={() => handleAppointed(p.id, "no")}
+            className="text-xs px-3 py-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 transition disabled:opacity-50 font-semibold">No</button>
+        </div>
+      ),
     },
     {
-      key: "vikritiType",
-      label: "Dosha",
-      render: (p) =>
-        p.vikritiType ? (
-          <Badge label={p.vikritiType} color="green" />
-        ) : (
-          <Badge label="Pending AI" color="gray" />
-        ),
-    },
-    {
-      key: "isAppointed",
-      label: "Entered Cabin?",
-      render: (p) =>
-        p.isAppointed === "yes" ? (
-          <Badge label="✓ Yes" color="green" />
-        ) : (
-          <div className="flex gap-1">
-            <button
-              disabled={updating[p.id]}
-              onClick={() => handleAppointed(p.id, "yes")}
-              className="text-xs px-3 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 transition disabled:opacity-50 font-semibold"
-            >
-              Yes
-            </button>
-            <button
-              disabled={updating[p.id]}
-              onClick={() => handleAppointed(p.id, "no")}
-              className="text-xs px-3 py-1 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 transition disabled:opacity-50 font-semibold"
-            >
-              No
-            </button>
-          </div>
-        ),
-    },
-    {
-      key: "actions",
-      label: "",
+      key: "actions", label: "",
       render: (p) => (
-        <button
-          onClick={() => setCancelModal({ patient: p, type: "appointment" })}
-          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition font-medium border border-red-100"
-          title="Cancel appointment"
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
+        <button onClick={() => setCancelModal({ patient: p, type: "appointment" })}
+          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition font-medium border border-red-100">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
           Cancel
         </button>
@@ -309,51 +228,16 @@ const AppointmentData = ({ viewType = "appointments" }) => {
   ];
 
   const followupCols = [
+    { key: "followupDate",     label: "Follow-up Date", render: (p) => <span className="font-medium text-amber-700">{formatDate(p.followupDate)}</span> },
+    { key: "followupDuration", label: "Schedule",       render: (p) => <Badge label={p.followupDuration || "—"} color="amber" /> },
+    { key: "vikritiType",      label: "Dosha",          render: (p) => p.vikritiType ? <Badge label={p.vikritiType} color="green" /> : <Badge label="N/A" color="gray" /> },
     {
-      key: "followupDate",
-      label: "Follow-up Date",
+      key: "actions", label: "",
       render: (p) => (
-        <span className="font-medium text-amber-700">
-          {formatDate(p.followupDate)}
-        </span>
-      ),
-    },
-    {
-      key: "followupDuration",
-      label: "Schedule",
-      render: (p) => <Badge label={p.followupDuration || "—"} color="amber" />,
-    },
-    {
-      key: "vikritiType",
-      label: "Dosha",
-      render: (p) =>
-        p.vikritiType ? (
-          <Badge label={p.vikritiType} color="green" />
-        ) : (
-          <Badge label="N/A" color="gray" />
-        ),
-    },
-    {
-      key: "actions",
-      label: "",
-      render: (p) => (
-        <button
-          onClick={() => setCancelModal({ patient: p, type: "followup" })}
-          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition font-medium border border-red-100"
-          title="Cancel follow-up"
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
+        <button onClick={() => setCancelModal({ patient: p, type: "followup" })}
+          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition font-medium border border-red-100">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
           Cancel
         </button>
@@ -362,149 +246,67 @@ const AppointmentData = ({ viewType = "appointments" }) => {
   ];
 
   const opdCols = [
-    {
-      key: "isAppointed",
-      label: "Visited",
-      render: () => <Badge label="✓ Completed" color="green" />,
-    },
-    {
-      key: "followupDuration",
-      label: "Follow-up",
-      render: (p) =>
-        p.followupDuration && p.followupDuration !== "No" ? (
-          <Badge label={`In ${p.followupDuration}`} color="amber" />
-        ) : (
-          <Badge label="None" color="gray" />
-        ),
-    },
-    {
-      key: "vikritiType",
-      label: "Dosha",
-      render: (p) =>
-        p.vikritiType ? (
-          <Badge label={p.vikritiType} color="green" />
-        ) : (
-          <Badge label="N/A" color="gray" />
-        ),
-    },
+    { key: "isAppointed",      label: "Visited",    render: () => <Badge label="✓ Completed" color="green" /> },
+    { key: "followupDuration", label: "Follow-up",  render: (p) => p.followupDuration && p.followupDuration !== "No" ? <Badge label={`In ${p.followupDuration}`} color="amber" /> : <Badge label="None" color="gray" /> },
+    { key: "vikritiType",      label: "Dosha",      render: (p) => p.vikritiType ? <Badge label={p.vikritiType} color="green" /> : <Badge label="N/A" color="gray" /> },
   ];
+
+  const pageTitle = viewType === "followups" ? "Follow-ups" : viewType === "opd" ? "OPD — Today's Visits" : "Appointments";
 
   return (
     <div className="flex-1 bg-gray-50 min-h-screen">
-      <div className="p-8">
+      <Toast toast={toast} />
+      <div className="p-4 sm:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {viewType === "followups" ? "Follow-ups" : viewType === "opd" ? "OPD — Today's Visits" : "Appointments"}
-            </h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{pageTitle}</h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              {new Date().toLocaleDateString("en-IN", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+              {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {showSearch ? (
               <div className="flex items-center bg-white border rounded-xl px-3 py-2 shadow-sm">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Search patient…"
-                  value={search}
+                <input autoFocus type="text" placeholder="Search patient…" value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="outline-none text-sm w-44 text-gray-700"
-                />
-                <button
-                  onClick={() => {
-                    setShowSearch(false);
-                    setSearch("");
-                  }}
-                  className="ml-2 text-gray-400 hover:text-gray-700 text-sm"
-                >
-                  ✕
-                </button>
+                  className="outline-none text-sm w-36 sm:w-44 text-gray-700" />
+                <button onClick={() => { setShowSearch(false); setSearch(""); }}
+                  className="ml-2 text-gray-400 hover:text-gray-700 text-sm">✕</button>
               </div>
             ) : (
-              <button
-                onClick={() => setShowSearch(true)}
-                className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition"
-              >
-                <svg
-                  className="w-4 h-4 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path strokeLinecap="round" d="m21 21-4.35-4.35" />
+              <button onClick={() => setShowSearch(true)}
+                className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition">
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="m21 21-4.35-4.35" />
                 </svg>
               </button>
             )}
-            <button
-              onClick={fetchAll}
-              className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition"
-              title="Refresh"
-            >
-              <svg
-                className="w-4 h-4 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+            <button onClick={fetchAll} className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition" title="Refresh">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </div>
         </div>
 
-        {viewType !== "followups" && viewType !== "opd" && (
-          <SectionTable
-            title="Appointments"
-            patients={filter(appointments)}
-            columns={apptCols}
-            emptyMsg="No appointments registered today."
-            loading={loading}
-          />
+        {viewType === "appointments" && (
+          <SectionTable title="Appointments" patients={filter(appointments)} columns={apptCols}
+            emptyMsg="No appointments registered." loading={loading} />
         )}
         {viewType === "followups" && (
-          <SectionTable
-            title="Follow Ups"
-            patients={filter(followups)}
-            columns={followupCols}
-            emptyMsg="No follow-ups scheduled."
-            loading={loading}
-          />
+          <SectionTable title="Follow Ups" patients={filter(followups)} columns={followupCols}
+            emptyMsg="No follow-ups scheduled." loading={loading} />
         )}
         {viewType === "opd" && (
-          <SectionTable
-            title="OPD — Today's Completed Visits"
-            patients={filter(opd)}
-            columns={opdCols}
-            emptyMsg="No completed visits recorded today."
-            loading={loading}
-          />
+          <SectionTable title="OPD — Today's Completed Visits" patients={filter(opd)} columns={opdCols}
+            emptyMsg="No completed visits recorded today." loading={loading} />
         )}
       </div>
 
-      {/* Cancel Confirmation Modal */}
       {cancelModal && (
-        <CancelModal
-          patient={cancelModal.patient}
-          type={cancelModal.type}
-          onConfirm={handleCancelConfirm}
-          onClose={() => setCancelModal(null)}
-          loading={cancelling}
-        />
+        <CancelModal patient={cancelModal.patient} type={cancelModal.type}
+          onConfirm={handleCancelConfirm} onClose={() => setCancelModal(null)} loading={cancelling} />
       )}
     </div>
   );
