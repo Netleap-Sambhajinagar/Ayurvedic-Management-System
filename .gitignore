@@ -1,33 +1,66 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.venv/
-env/
-venv/
-ENV/
-
-# Data
-*.db
-*.sqlite
-
-# IDE
-.vscode/
-.idea/
-
-# JavaScript & Node
-node_modules/
+# ── Environment variables (NEVER commit these) ────────────
 .env
+.env.local
+.env.production
+.env.development
 backend/.env
 frontend/.env
 
-# Temporary / Custom Files
+# ── Dependencies ──────────────────────────────────────────
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# ── Build output ──────────────────────────────────────────
+dist/
+build/
+frontend/dist/
+frontend/build/
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# ── SSL certificates (keep locally, never commit) ─────────
+*.pem
+*.crt
+*.key
+ca.pem
+
+# ── OS files ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# ── Database ──────────────────────────────────────────────
+*.db
+*.sqlite
+*.sql
+ayurveda_backup.sql
+
+# ── Misc project files ────────────────────────────────────
+temp.csv
+*.pbix
 frontend/public/data.csv
 frontend/public/Report/
 files.txt
 files_list.txt
-pbix_utf8.txt
-pbix_visuals.txt
-report_layout.json
 tmp.txt
-temp.csv
