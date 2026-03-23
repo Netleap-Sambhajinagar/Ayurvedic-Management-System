@@ -8,17 +8,18 @@ const doctorRoutes = require("./routes/doctorRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const webhookRoutes = require("./routes/googleWebhook");
 
-// Ensure models are loaded so Sequelize knows about them
 require("./models/Patient");
 require("./models/PatientVisit");
 
 const app = express();
+
 app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true,
 }));
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
+
 require("./services/syncPatient");
 
 app.use("/api/auth", authRoutes);
@@ -26,9 +27,13 @@ app.use("/api", doctorRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/webhooks", webhookRoutes);
 
-// Sync all models (alter:true adds new columns without dropping data)
+// Only use alter:true in development — never in production
+const syncOptions = process.env.NODE_ENV === "production"
+  ? {}
+  : { alter: true };
+
 sequelize
-  .sync({ alter: true })
+  .sync(syncOptions)
   .then(() => console.log("✅ MySQL connected and synced"))
   .catch((err) => console.error("❌ MySQL connection error:", err));
 

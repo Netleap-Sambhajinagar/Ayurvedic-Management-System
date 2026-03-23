@@ -1,1 +1,365 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Jost:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
+/* ── Tokens ───────────────────────────────────────────── */
+:root {
+  --forest: #1c4532;
+  --fern: #276749;
+  --sage: #4a7c59;
+  --mint: #84c89a;
+  --parchment: #faf6ef;
+  --cream: #f4ede0;
+  --terracotta: #c1694f;
+  --earth: #8b5e3c;
+  --sand: #d4b896;
+  --ink: #1a1f1c;
+  --mist: #6b7e72;
+  --border: rgba(39, 103, 73, 0.14);
+  --shadow-sm: 0 2px 12px rgba(28, 69, 50, 0.08);
+  --shadow-md: 0 6px 28px rgba(28, 69, 50, 0.12);
+  --shadow-lg: 0 16px 56px rgba(28, 69, 50, 0.18);
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Jost", system-ui, sans-serif;
+  --font-mono: "DM Mono", monospace;
+  --radius: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--parchment);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Keyframes ────────────────────────────────────────── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes slideRight {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes leafSpin {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.28;
+    transform: scale(1.06);
+  }
+}
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Animation classes ────────────────────────────────── */
+.anim-up {
+  animation: fadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-in {
+  animation: fadeIn 0.45s ease both;
+}
+.anim-scale {
+  animation: scaleIn 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+.anim-right {
+  animation: slideRight 0.4s ease both;
+}
+.anim-left {
+  animation: slideLeft 0.4s ease both;
+}
+.anim-float {
+  animation: float 6s ease-in-out infinite;
+}
+.anim-leaf {
+  animation: leafSpin 5s ease-in-out infinite;
+}
+.anim-count {
+  animation: countUp 0.6s ease both;
+}
+.anim-page {
+  animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.d-75 {
+  animation-delay: 75ms;
+}
+.d-150 {
+  animation-delay: 150ms;
+}
+.d-225 {
+  animation-delay: 225ms;
+}
+.d-300 {
+  animation-delay: 300ms;
+}
+.d-400 {
+  animation-delay: 400ms;
+}
+.d-500 {
+  animation-delay: 500ms;
+}
+.d-600 {
+  animation-delay: 600ms;
+}
+.d-700 {
+  animation-delay: 700ms;
+}
+
+/* ── Reusable UI ──────────────────────────────────────── */
+.card {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Only apply hover lift to cards that are actually interactive/clickable */
+.card-interactive {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+  cursor: pointer;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, var(--forest), var(--fern));
+  color: white;
+  border: none;
+  outline: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover::after {
+  opacity: 1;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(28, 69, 50, 0.32);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--fern);
+  border: 1px solid var(--border);
+  padding: 0.65rem 1.2rem;
+  border-radius: 50px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.btn-ghost:hover {
+  background: rgba(39, 103, 73, 0.07);
+  border-color: rgba(39, 103, 73, 0.3);
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1.5px solid rgba(39, 103, 73, 0.18);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: white;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.15s;
+}
+.input-field:focus {
+  border-color: var(--fern);
+  box-shadow: 0 4px 14px rgba(39, 103, 73, 0.18);
+  transform: translateY(-1px);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge-green {
+  background: rgba(39, 103, 73, 0.1);
+  color: var(--fern);
+}
+.badge-amber {
+  background: rgba(193, 105, 79, 0.1);
+  color: var(--terracotta);
+}
+.badge-gray {
+  background: rgba(107, 126, 114, 0.1);
+  color: var(--mist);
+}
+.badge-red {
+  background: rgba(193, 105, 79, 0.12);
+  color: #b94040;
+}
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sand);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sage);
+}
+
+/* ── Shimmer skeleton ─────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg, #f0ede8 25%, #e8e2d8 50%, #f0ede8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+/* ── Leaf SVG watermark ───────────────────────────────── */
+.leaf-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M40 8 Q65 28 58 52 Q40 70 22 52 Q15 28 40 8Z' fill='none' stroke='%23276749' stroke-width='.6' opacity='.09'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
+
+/* ── Table rows ───────────────────────────────────────── */
+.trow {
+  transition: background 0.15s;
+}
+.trow:hover {
+  background: #f4f9f6;
+}

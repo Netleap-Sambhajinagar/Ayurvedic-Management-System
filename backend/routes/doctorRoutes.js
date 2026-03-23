@@ -2,6 +2,10 @@ const express = require("express");
 const router  = express.Router();
 const Doctor  = require("../models/Doctor");
 const bcrypt  = require("bcryptjs");
+const authMiddleware = require("../middleware/authMiddleware");
+
+// Apply auth to ALL routes
+router.use(authMiddleware);
 
 // ── GET doctor by email ───────────────────────────────────────────────────────
 router.get("/doctor", async (req, res) => {
@@ -10,7 +14,6 @@ router.get("/doctor", async (req, res) => {
     if (!email) return res.status(400).json({ error: "Email is required" });
     const doctor = await Doctor.findOne({ where: { email } });
     if (!doctor) return res.status(404).json({ error: "Doctor not found" });
-    // Never send password hash to frontend
     const { password: _, ...safe } = doctor.toJSON();
     res.json(safe);
   } catch (err) {
@@ -19,12 +22,14 @@ router.get("/doctor", async (req, res) => {
   }
 });
 
-// ── PUT update profile (name, email, specialization, avatar) ─────────────────
+// ── PUT update profile — only allows own profile (ownership check via JWT) ────
 router.put("/doctor", async (req, res) => {
   try {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: "Email is required" });
+    // Use doctorId from JWT (set by authMiddleware) to look up the real email
+    const currentDoctor = await Doctor.findByPk(req.doctorId);
+    if (!currentDoctor) return res.status(404).json({ error: "Doctor not found" });
 
+    const currentEmail = currentDoctor.email;
     const { name, email: newEmail, specialization, avatar } = req.body;
 
     // Avatar size guard: base64 of 1 MB ≈ ~1.37 MB string → cap at 1.5 MB chars
@@ -36,11 +41,11 @@ router.put("/doctor", async (req, res) => {
     if (name)           updatePayload.name           = name;
     if (newEmail)       updatePayload.email           = newEmail;
     if (specialization) updatePayload.specialization  = specialization;
-    if (avatar !== undefined) updatePayload.avatar    = avatar; // allow null to clear
+    if (avatar !== undefined) updatePayload.avatar    = avatar;
 
-    await Doctor.update(updatePayload, { where: { email } });
+    await Doctor.update(updatePayload, { where: { email: currentEmail } });
 
-    const updatedDoctor = await Doctor.findOne({ where: { email: newEmail || email } });
+    const updatedDoctor = await Doctor.findOne({ where: { email: newEmail || currentEmail } });
     if (!updatedDoctor) return res.status(404).json({ error: "Doctor not found" });
 
     const { password: _, ...safe } = updatedDoctor.toJSON();
@@ -54,8 +59,8 @@ router.put("/doctor", async (req, res) => {
 // ── PATCH change password ─────────────────────────────────────────────────────
 router.patch("/doctor/change-password", async (req, res) => {
   try {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: "Email is required" });
+    const doctor = await Doctor.findByPk(req.doctorId);
+    if (!doctor) return res.status(404).json({ error: "Doctor not found" });
 
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword)
@@ -63,15 +68,12 @@ router.patch("/doctor/change-password", async (req, res) => {
     if (newPassword.length < 6)
       return res.status(400).json({ error: "New password must be at least 6 characters." });
 
-    const doctor = await Doctor.findOne({ where: { email } });
-    if (!doctor) return res.status(404).json({ error: "Doctor not found" });
-
     const isMatch = await bcrypt.compare(currentPassword, doctor.password);
     if (!isMatch)
       return res.status(401).json({ error: "Current password is incorrect." });
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    await Doctor.update({ password: hashed }, { where: { email } });
+    await Doctor.update({ password: hashed }, { where: { id: req.doctorId } });
 
     res.json({ message: "Password changed successfully." });
   } catch (err) {

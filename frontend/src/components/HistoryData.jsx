@@ -1,145 +1,102 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import Toast from "./Toast";
 import { PATIENTS_API } from "../config";
-const BASE = PATIENTS_API;
 
-const Badge = ({ label, color }) => {
-  const colors = {
-    green:  "bg-green-100 text-green-700",
-    red:    "bg-red-100 text-red-600",
-    gray:   "bg-gray-100 text-gray-500",
-    amber:  "bg-amber-100 text-amber-700",
-    blue:   "bg-blue-100 text-blue-700",
-    purple: "bg-purple-100 text-purple-700",
+const Badge = ({ label, color="green" }) => {
+  const s = {
+    green:  { background:"rgba(39,103,73,.1)",  color:"var(--fern)" },
+    red:    { background:"rgba(139,42,42,.1)",   color:"#b94040" },
+    gray:   { background:"rgba(107,126,114,.1)", color:"var(--mist)" },
+    amber:  { background:"rgba(193,105,79,.1)",  color:"var(--terracotta)" },
+    blue:   { background:"rgba(14,165,233,.1)",  color:"#0369a1" },
+    purple: { background:"rgba(107,33,168,.1)",  color:"#7c3aed" },
   };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[color] || colors.gray}`}>
-      {label}
-    </span>
-  );
+  return <span className="badge" style={s[color]||s.gray}>{label}</span>;
 };
 
-const visitTypeColor = (type) => {
-  if (type === "appointment") return "blue";
-  if (type === "followup")    return "amber";
-  if (type === "opd")         return "purple";
-  return "gray";
-};
+const typeColor   = t => t==="appointment"?"blue":t==="followup"?"amber":t==="opd"?"purple":"gray";
+const statusColor = s => s==="completed"?"green":s==="missed"?"red":"gray";
 
-const visitTypeLabel = (type) => {
-  if (type === "appointment") return "Appointment";
-  if (type === "followup")    return "Follow-up";
-  if (type === "opd")         return "OPD";
-  return type;
-};
-
-const statusColor = (status) => {
-  if (status === "completed") return "green";
-  if (status === "missed")    return "red";
-  return "gray";
-};
-
-/* ── Confirmation Modal ─────────────────────────────────────────── */
 const DeleteConfirmModal = ({ visit, onConfirm, onCancel, deleting }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-    <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
-      {/* Icon */}
-      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
-        <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+    <div className="card relative w-full max-w-sm p-6 z-10 anim-scale">
+      <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4"
+        style={{ background:"rgba(193,105,79,.12)" }}>
+        <svg className="w-6 h-6" style={{ color:"var(--terracotta)" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round"
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
         </svg>
       </div>
-
-      <h3 className="text-base font-bold text-gray-900 text-center mb-1">Delete Visit Record?</h3>
-      <p className="text-sm text-gray-500 text-center mb-1">
-        This will permanently delete the appointment record for
+      <h3 className="text-xl font-light text-center mb-1" style={{ fontFamily:"var(--font-serif)", color:"var(--forest)" }}>
+        Delete Visit Record?
+      </h3>
+      <p className="text-sm text-center mb-1" style={{ color:"var(--mist)" }}>
+        This will permanently delete the visit for
       </p>
-      <p className="text-sm font-semibold text-gray-800 text-center mb-1">
-        {visit?.patient?.name || "this patient"}
+      <p className="text-sm font-semibold text-center mb-1" style={{ color:"var(--ink)" }}>
+        {visit?.patient?.name || visit?.patientName || "this patient"}
       </p>
-      <p className="text-xs text-gray-400 text-center mb-5">
-        {visit?.visitDate
-          ? new Date(visit.visitDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-          : ""}{" "}
-        · {visitTypeLabel(visit?.visitType)}
+      <p className="text-xs text-center mb-4" style={{ color:"var(--sand)" }}>
+        {visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+        {" · "}{visit?.visitType}
       </p>
-      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center mb-5">
+      <div className="text-xs text-center px-3 py-2 rounded-xl mb-5"
+        style={{ background:"rgba(193,105,79,.08)", color:"var(--terracotta)", border:"1px solid rgba(193,105,79,.2)" }}>
         ⚠️ Patient details will <strong>not</strong> be deleted — only this visit record.
-      </p>
-
+      </div>
       <div className="flex gap-3">
-        <button
-          onClick={onCancel}
-          disabled={deleting}
-          className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
-        >
+        <button onClick={onCancel} disabled={deleting} className="btn-ghost flex-1 justify-center py-2.5">
           Cancel
         </button>
-        <button
-          onClick={onConfirm}
-          disabled={deleting}
-          className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          {deleting ? (
-            <>
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              Deleting…
-            </>
-          ) : "Delete Record"}
+        <button onClick={onConfirm} disabled={deleting}
+          className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition"
+          style={{ background:"linear-gradient(135deg,#8b2a2a,var(--terracotta))", opacity:deleting?.6:1 }}>
+          {deleting
+            ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Deleting…</>
+            : "Delete Record"}
         </button>
       </div>
     </div>
   </div>
 );
 
-/* ── Main Component ─────────────────────────────────────────────── */
-const HistoryData = () => {
+export default function HistoryData() {
   const navigate = useNavigate();
-  const [visits, setVisits] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [filterType,   setFilterType]   = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-
-  // Delete state
+  const [history, setHistory]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
+  const [showSearch, setShowSearch]     = useState(false);
+  const [typeFilter, setTypeFilter]     = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState(null);
+  const [deleting, setDeleting]         = useState(false);
+  const [toast, setToast]               = useState(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await axios.get(`${BASE}/history`);
-      setVisits(res.data);
-    } catch (err) {
-      console.error("Failed to load history", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    try { const r = await axios.get(`${PATIENTS_API}/history`); setHistory(r.data||[]); }
+    catch(e) { console.error(e); setHistory([]); }
+    finally { setLoading(false); }
+  },[]);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(()=>{ fetchHistory(); },[fetchHistory]);
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (msg, type="success") => {
+    setToast({msg,type});
+    setTimeout(()=>setToast(null),3000);
   };
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await axios.delete(`${BASE}/visits/${deleteTarget.id}`);
-      setVisits((prev) => prev.filter((v) => v.id !== deleteTarget.id));
+      await axios.delete(`${PATIENTS_API}/visits/${deleteTarget.id}`);
+      setHistory(prev => prev.filter(v => v.id !== deleteTarget.id));
       showToast("Visit record deleted successfully.");
-    } catch (err) {
+    } catch(err) {
       showToast(err?.response?.data?.error || "Failed to delete record.", "error");
     } finally {
       setDeleting(false);
@@ -147,227 +104,169 @@ const HistoryData = () => {
     }
   };
 
-  const formatDate = (d) =>
-    d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  const fmt = d => d ? new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 
-  const formatDateTime = (d) =>
-    d ? new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
-
-  const filtered = visits.filter((v) => {
-    const name = v.patient?.name?.toLowerCase() || "";
-    const matchSearch = name.includes(search.toLowerCase()) ||
-      v.patient?.email?.toLowerCase().includes(search.toLowerCase());
-    const matchType   = filterType   === "all" || v.visitType === filterType;
-    const matchStatus = filterStatus === "all" || v.status    === filterStatus;
-    return matchSearch && matchType && matchStatus;
+  const filtered = history.filter(h => {
+    const name = (h.patient?.name || h.patientName || "").toLowerCase();
+    const matchName   = name.includes(search.toLowerCase()) || !search;
+    const matchType   = typeFilter==="All"   || h.visitType===typeFilter.toLowerCase();
+    const matchStatus = statusFilter==="All" || h.status===statusFilter.toLowerCase();
+    return matchName && matchType && matchStatus;
   });
 
-  const total       = visits.length;
-  const completed   = visits.filter((v) => v.status === "completed").length;
-  const missed      = visits.filter((v) => v.status === "missed").length;
-  const pending     = visits.filter((v) => v.status === "pending").length;
-  const apptCount   = visits.filter((v) => v.visitType === "appointment").length;
-  const followCount = visits.filter((v) => v.visitType === "followup").length;
-  const opdCount    = visits.filter((v) => v.visitType === "opd").length;
+  const stats = [
+    { label:"Total",        value: history.length },
+    { label:"Completed",    value: history.filter(v=>v.status==="completed").length },
+    { label:"Pending",      value: history.filter(v=>v.status==="pending").length },
+    { label:"Missed",       value: history.filter(v=>v.status==="missed").length },
+    { label:"Appointments", value: history.filter(v=>v.visitType==="appointment").length },
+    { label:"Follow-ups",   value: history.filter(v=>v.visitType==="followup").length },
+    { label:"OPD",          value: history.filter(v=>v.visitType==="opd").length },
+  ];
 
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen">
-      {/* Delete Modal */}
+    <div className="flex-1 min-h-screen anim-page" style={{ background:"var(--parchment)" }}>
+      <Toast toast={toast}/>
+
       {deleteTarget && (
         <DeleteConfirmModal
           visit={deleteTarget}
           onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={()=>setDeleteTarget(null)}
           deleting={deleting}
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 transition-all ${
-          toast.type === "error" ? "bg-red-500 text-white" : "bg-green-500 text-white"
-        }`}>
-          {toast.type === "error"
-            ? <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-          }
-          {toast.msg}
+      {/* Header */}
+      <div className="px-6 sm:px-10 py-5 border-b flex items-center justify-between gap-4 flex-wrap"
+        style={{ background:"white", borderColor:"var(--border)" }}>
+        <div>
+          <h1 className="text-3xl font-light" style={{ fontFamily:"var(--font-serif)", color:"var(--forest)" }}>Visit History</h1>
+          <p className="text-xs mt-0.5" style={{ color:"var(--mist)" }}>All patient visits across all time</p>
         </div>
-      )}
-
-      <div className="p-4 sm:p-6 lg:p-8">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5 gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Visit History</h1>
-            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">All patient visits across all time</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {showSearch ? (
-              <div className="flex items-center bg-white border rounded-xl px-3 py-2 shadow-sm">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Search by name or email…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="outline-none text-sm w-36 sm:w-52 text-gray-700"
-                />
-                <button onClick={() => { setShowSearch(false); setSearch(""); }}
-                  className="ml-2 text-gray-400 hover:text-gray-700 text-sm">✕</button>
-              </div>
-            ) : (
-              <button onClick={() => setShowSearch(true)}
-                className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition">
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="m21 21-4.35-4.35" />
-                </svg>
-              </button>
-            )}
-            <button onClick={fetchHistory}
-              className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition" title="Refresh">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Summary Cards — scrollable on mobile */}
-        <div className="flex gap-3 mb-5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 lg:grid-cols-7">
-          {[
-            { label: "Total",        value: total,       color: "border-gray-200 bg-white" },
-            { label: "Completed",    value: completed,   color: "border-green-200 bg-green-50" },
-            { label: "Pending",      value: pending,     color: "border-gray-200 bg-gray-50" },
-            { label: "Missed",       value: missed,      color: "border-red-200 bg-red-50" },
-            { label: "Appointments", value: apptCount,   color: "border-blue-200 bg-blue-50" },
-            { label: "Follow-ups",   value: followCount, color: "border-amber-200 bg-amber-50" },
-            { label: "OPD",          value: opdCount,    color: "border-purple-200 bg-purple-50" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className={`rounded-2xl border p-3 sm:p-4 text-center shadow-sm shrink-0 min-w-[80px] sm:min-w-0 ${color}`}>
-              <div className="text-xl sm:text-2xl font-bold text-gray-800">{value}</div>
-              <div className="text-xs text-gray-500 mt-0.5 whitespace-nowrap">{label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Filter Bar — scrollable on mobile */}
-        <div className="flex items-center gap-2 mb-5 bg-white border rounded-2xl px-3 sm:px-4 py-3 shadow-sm overflow-x-auto">
-          <span className="text-xs font-semibold text-gray-500 shrink-0">Filter:</span>
-          <div className="flex gap-1.5 shrink-0">
-            {["all", "appointment", "followup", "opd"].map((t) => (
-              <button key={t}
-                onClick={() => setFilterType(t)}
-                className={`text-xs px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
-                  filterType === t ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}>
-                {t === "all" ? "All Types" : visitTypeLabel(t)}
-              </button>
-            ))}
-          </div>
-          <div className="w-px h-5 bg-gray-200 mx-1 shrink-0" />
-          <div className="flex gap-1.5 shrink-0">
-            {["all", "completed", "pending", "missed"].map((s) => (
-              <button key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`text-xs px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
-                  filterStatus === s ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}>
-                {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="ml-auto text-xs text-gray-400 shrink-0 pl-2">
-            {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-          </div>
-        </div>
-
-        {/* Table / Cards */}
-        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400">
-              <svg className="w-6 h-6 animate-spin mr-2 text-green-500" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              Loading visit records…
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
-              <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm">No records found</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}
+            className="text-xs rounded-xl px-3 py-2 outline-none"
+            style={{ background:"var(--parchment)", border:"1px solid var(--border)", color:"var(--mist)", fontFamily:"var(--font-sans)" }}>
+            {["All","Appointment","Followup","OPD"].map(t=><option key={t}>{t}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+            className="text-xs rounded-xl px-3 py-2 outline-none"
+            style={{ background:"var(--parchment)", border:"1px solid var(--border)", color:"var(--mist)", fontFamily:"var(--font-sans)" }}>
+            {["All","Completed","Pending","Missed"].map(s=><option key={s}>{s}</option>)}
+          </select>
+          {showSearch ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border" style={{ background:"white", borderColor:"var(--border)" }}>
+              <input autoFocus type="text" placeholder="Search patient…" value={search}
+                onChange={e=>setSearch(e.target.value)} className="outline-none text-xs w-36 sm:w-48"
+                style={{ fontFamily:"var(--font-sans)", color:"var(--ink)" }}/>
+              <button onClick={()=>{setShowSearch(false);setSearch("");}} style={{ color:"var(--mist)" }}>✕</button>
             </div>
           ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
+            <button onClick={()=>setShowSearch(true)} className="btn-ghost text-xs py-1.5 px-3">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"/><path strokeLinecap="round" d="m21 21-4.35-4.35"/>
+              </svg>
+              Search
+            </button>
+          )}
+          <button onClick={fetchHistory} className="btn-ghost text-xs py-1.5 px-3">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="px-6 sm:px-10 py-3 border-b flex items-center gap-2 overflow-x-auto"
+        style={{ background:"var(--parchment)", borderColor:"var(--border)" }}>
+        {stats.map(({label,value})=>(
+          <div key={label} className="flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-xl"
+            style={{ background:"white", border:"1px solid var(--border)" }}>
+            <span className="text-base font-light" style={{ fontFamily:"var(--font-serif)", color:"var(--forest)" }}>{value}</span>
+            <span className="text-xs" style={{ color:"var(--mist)" }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="px-6 sm:px-10 py-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <svg className="w-7 h-7 animate-spin" style={{ color:"var(--fern)" }} fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <p className="text-sm" style={{ color:"var(--mist)" }}>Loading history…</p>
+          </div>
+        ) : filtered.length===0 ? (
+          <div className="text-center py-20">
+            <div className="text-5xl mb-4 anim-float inline-block">📋</div>
+            <p className="text-xl mb-1" style={{ fontFamily:"var(--font-serif)", color:"var(--forest)" }}>No records found</p>
+            <p className="text-sm" style={{ color:"var(--mist)" }}>Try adjusting your filters</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="card overflow-hidden anim-up hidden md:block">
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">#</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Patient</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Visit Date</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dosha / Vikriti</th>
-                      <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Updated</th>
-                      <th className="px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Actions</th>
+                    <tr style={{ background:"var(--parchment)", borderBottom:"1px solid var(--border)" }}>
+                      {["Patient","Type","Date","Status","Dosha","Actions"].map(h=>(
+                        <th key={h} className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-widest"
+                          style={{ color:"var(--mist)" }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filtered.map((v, idx) => (
-                      <tr key={v.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3.5 text-gray-400 text-xs">{idx + 1}</td>
-
-                        {/* Patient */}
-                        <td className="px-4 py-3.5">
+                  <tbody>
+                    {filtered.map((h,i)=>(
+                      <tr key={h.id||i} className="trow" style={{ borderBottom:"1px solid rgba(39,103,73,.05)" }}>
+                        <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-green-600 uppercase">
-                                {v.patient?.name?.charAt(0) || "?"}
-                              </span>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold uppercase"
+                              style={{ background:"linear-gradient(135deg,#c8e6d0,#a8d4b8)", color:"var(--forest)", fontFamily:"var(--font-serif)" }}>
+                              {(h.patient?.name||h.patientName)?.charAt(0)||"?"}
                             </div>
                             <div>
-                              <div className="font-medium text-gray-800 text-sm">{v.patient?.name || "Unknown"}</div>
-                              <div className="text-xs text-gray-400">{v.patient?.email || "—"}</div>
+                              <p className="text-sm font-medium" style={{ color:"var(--ink)" }}>
+                                {h.patient?.name||h.patientName||"—"}
+                              </p>
+                              {h.patient?.email && (
+                                <p className="text-xs" style={{ color:"var(--mist)" }}>{h.patient.email}</p>
+                              )}
                             </div>
                           </div>
                         </td>
-
-                        <td className="px-4 py-3.5 text-gray-700 text-sm font-medium">{formatDate(v.visitDate)}</td>
-                        <td className="px-4 py-3.5"><Badge label={visitTypeLabel(v.visitType)} color={visitTypeColor(v.visitType)} /></td>
-                        <td className="px-4 py-3.5">
-                          <Badge label={v.status.charAt(0).toUpperCase() + v.status.slice(1)} color={statusColor(v.status)} />
+                        <td className="py-3 px-4"><Badge label={h.visitType} color={typeColor(h.visitType)}/></td>
+                        <td className="py-3 px-4 text-sm" style={{ color:"var(--mist)" }}>{fmt(h.visitDate)}</td>
+                        <td className="py-3 px-4"><Badge label={h.status} color={statusColor(h.status)}/></td>
+                        <td className="py-3 px-4">
+                          {h.patient?.vikritiType
+                            ? <Badge label={h.patient.vikritiType} color="green"/>
+                            : <span style={{ color:"var(--sand)" }}>—</span>}
                         </td>
-                        <td className="px-4 py-3.5">
-                          {v.patient?.vikritiType
-                            ? <Badge label={v.patient.vikritiType} color="green" />
-                            : <span className="text-xs text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3.5 text-xs text-gray-400">{formatDateTime(v.updatedAt)}</td>
-
-                        {/* Actions */}
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={() => navigate(`/patient/${v.patientId}`)}
-                              className="text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg transition font-medium border border-green-200"
-                            >
+                              onClick={()=>navigate(`/patient/${h.patientId||h.patient?.id}`, { state: { from: "history" } })}
+                              className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                              style={{ color:"var(--fern)", border:"1px solid rgba(39,103,73,.25)", background:"rgba(39,103,73,.05)" }}
+                              onMouseEnter={e=>e.currentTarget.style.background="rgba(39,103,73,.12)"}
+                              onMouseLeave={e=>e.currentTarget.style.background="rgba(39,103,73,.05)"}>
                               View
                             </button>
                             <button
-                              onClick={() => setDeleteTarget(v)}
-                              className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition font-medium border border-red-200"
-                              title="Delete this visit record"
-                            >
+                              onClick={()=>setDeleteTarget(h)}
+                              className="flex items-center justify-center p-1.5 rounded-lg transition"
+                              style={{ color:"var(--terracotta)", border:"1px solid rgba(193,105,79,.25)", background:"rgba(193,105,79,.05)" }}
+                              onMouseEnter={e=>e.currentTarget.style.background="rgba(193,105,79,.12)"}
+                              onMouseLeave={e=>e.currentTarget.style.background="rgba(193,105,79,.05)"}
+                              title="Delete this visit record">
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round"
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                               </svg>
                             </button>
                           </div>
@@ -377,61 +276,58 @@ const HistoryData = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
 
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-gray-100">
-                {filtered.map((v, idx) => (
-                  <div key={v.id} className="p-4">
+            {/* Mobile cards */}
+            <div className="card overflow-hidden anim-up md:hidden">
+              <div className="divide-y" style={{ borderColor:"rgba(39,103,73,.06)" }}>
+                {filtered.map((h,i)=>(
+                  <div key={h.id||i} className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                          <span className="text-sm font-bold text-green-600 uppercase">
-                            {v.patient?.name?.charAt(0) || "?"}
-                          </span>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-base font-semibold uppercase"
+                          style={{ background:"linear-gradient(135deg,#c8e6d0,#a8d4b8)", color:"var(--forest)", fontFamily:"var(--font-serif)" }}>
+                          {(h.patient?.name||h.patientName)?.charAt(0)||"?"}
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-800 text-sm">{v.patient?.name || "Unknown"}</div>
-                          <div className="text-xs text-gray-400">{v.patient?.email || "—"}</div>
+                          <p className="font-medium text-sm" style={{ color:"var(--ink)" }}>{h.patient?.name||h.patientName||"—"}</p>
+                          {h.patient?.email && <p className="text-xs" style={{ color:"var(--mist)" }}>{h.patient.email}</p>}
                         </div>
                       </div>
-                      <span className="text-xs text-gray-400 shrink-0 mt-1">#{idx + 1}</span>
+                      <span className="text-xs shrink-0" style={{ color:"var(--sand)", fontFamily:"var(--font-mono)" }}></span>
                     </div>
-
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div>
-                        <div className="text-xs text-gray-400 mb-0.5">Visit Date</div>
-                        <div className="text-sm font-medium text-gray-700">{formatDate(v.visitDate)}</div>
+                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color:"var(--sand)" }}>Date</p>
+                        <p className="text-sm font-medium" style={{ color:"var(--ink)" }}>{fmt(h.visitDate)}</p>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-400 mb-0.5">Dosha</div>
-                        <div>
-                          {v.patient?.vikritiType
-                            ? <Badge label={v.patient.vikritiType} color="green" />
-                            : <span className="text-xs text-gray-400">—</span>}
-                        </div>
+                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color:"var(--sand)" }}>Dosha</p>
+                        {h.patient?.vikritiType
+                          ? <Badge label={h.patient.vikritiType} color="green"/>
+                          : <span className="text-sm" style={{ color:"var(--sand)" }}>—</span>}
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2 mb-3">
-                      <Badge label={visitTypeLabel(v.visitType)} color={visitTypeColor(v.visitType)} />
-                      <Badge label={v.status.charAt(0).toUpperCase() + v.status.slice(1)} color={statusColor(v.status)} />
-                      <span className="text-xs text-gray-400 ml-auto">{formatDate(v.updatedAt)}</span>
+                      <Badge label={h.visitType} color={typeColor(h.visitType)}/>
+                      <Badge label={h.status} color={statusColor(h.status)}/>
                     </div>
-
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => navigate(`/patient/${v.patientId}`)}
-                        className="flex-1 text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg transition font-medium border border-green-200 text-center"
-                      >
+                      <button onClick={()=>navigate(`/patient/${h.patientId||h.patient?.id}`, { state: { from: "history" } })}
+                        className="flex-1 text-xs py-2 rounded-xl font-medium text-center transition"
+                        style={{ color:"var(--fern)", border:"1px solid rgba(39,103,73,.25)", background:"rgba(39,103,73,.05)" }}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(39,103,73,.12)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="rgba(39,103,73,.05)"}>
                         View Patient
                       </button>
-                      <button
-                        onClick={() => setDeleteTarget(v)}
-                        className="flex items-center justify-center gap-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition font-medium border border-red-200"
-                      >
+                      <button onClick={()=>setDeleteTarget(h)}
+                        className="flex items-center justify-center gap-1.5 text-xs px-4 py-2 rounded-xl font-medium transition"
+                        style={{ color:"var(--terracotta)", border:"1px solid rgba(193,105,79,.25)", background:"rgba(193,105,79,.05)" }}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(193,105,79,.12)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="rgba(193,105,79,.05)"}>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                         </svg>
                         Delete
                       </button>
@@ -439,13 +335,10 @@ const HistoryData = () => {
                   </div>
                 ))}
               </div>
-            </>
-          )}
-        </div>
-
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
-};
-
-export default HistoryData;
+}

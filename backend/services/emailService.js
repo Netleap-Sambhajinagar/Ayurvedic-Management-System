@@ -178,4 +178,43 @@ async function sendReportEmail(patient, visits) {
   });
 }
 
-module.exports = { sendReportEmail };
+async function sendPasswordResetEmail(doctor, resetLink) {
+  const clinicName = process.env.CLINIC_NAME || "Ayurveda Care Clinic";
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f4ede0;font-family:'Jost',sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid rgba(39,103,73,.12);">
+    <div style="background:linear-gradient(135deg,#1c4532,#276749);padding:32px 36px;">
+      <h1 style="margin:0;color:white;font-size:22px;font-weight:400;">Password Reset</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,.7);font-size:14px;">${clinicName}</p>
+    </div>
+    <div style="padding:32px 36px;">
+      <p style="font-size:15px;color:#374151;margin:0 0 16px;">Hello Dr. ${doctor.name},</p>
+      <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
+        We received a request to reset your password. Click the button below to set a new password.
+        This link will expire in <strong>15 minutes</strong>.
+      </p>
+      <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#1c4532,#276749);color:white;text-decoration:none;padding:14px 28px;border-radius:50px;font-size:14px;font-weight:500;">
+        Reset Password →
+      </a>
+      <p style="font-size:12px;color:#9ca3af;margin:24px 0 0;">
+        If you didn't request this, you can safely ignore this email. Your password will not change.
+      </p>
+    </div>
+    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 36px;text-align:center;">
+      <p style="margin:0;font-size:11px;color:#d1d5db;">© ${new Date().getFullYear()} ${clinicName}</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+  await transporter.sendMail({
+    from: `"${clinicName}" <${process.env.EMAIL_USER}>`,
+    to: doctor.email,
+    subject: `Password Reset — ${clinicName}`,
+    html,
+  });
+}
+
+module.exports = { sendReportEmail, sendPasswordResetEmail };
