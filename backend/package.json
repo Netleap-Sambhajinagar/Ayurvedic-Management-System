@@ -12,7 +12,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@getbrevo/brevo": "^5.0.1",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -26,7 +25,8 @@
     "mysql2": "^3.19.0",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.2",
-    "sequelize": "^6.37.8"
+    "sequelize": "^6.37.8",
+    "sib-api-v3-sdk": "^8.5.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

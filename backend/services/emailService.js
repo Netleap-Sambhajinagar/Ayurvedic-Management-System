@@ -1,9 +1,9 @@
-const Brevo = require("@getbrevo/brevo");
+const SibApiV3Sdk = require("sib-api-v3-sdk");
 require("dotenv").config();
 
-const client = Brevo.ApiClient.instance;
-client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
-const apiInstance = new Brevo.TransactionalEmailsApi();
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+defaultClient.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
+const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
 const DOSHA_MAP = {
   "Thin, difficulty gaining weight": "Vata",
@@ -21,7 +21,7 @@ function formatDate(d) {
 }
 
 async function sendEmail(to, toName, subject, html) {
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
   sendSmtpEmail.sender = {
     name: process.env.CLINIC_NAME || "Ayurveda Care",
     email: process.env.EMAIL_USER,
