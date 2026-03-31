@@ -20,23 +20,65 @@ const HEALTH_EDIT_FIELDS = [
 // Followup duration map — data-driven
 const FOLLOWUP_DAYS = { "7 Days": 7, "15 Days": 15, "1 Month": 30 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VISIT ROUTES — must come BEFORE /:id routes to avoid param collision
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.patch("/visits/:visitId/cancel", async (req, res) => {
+  try {
+    const visit = await PatientVisit.findByPk(req.params.visitId);
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
+    if (visit.status === "completed")
+      return res.status(400).json({ error: "Cannot cancel a completed visit" });
+    await visit.update({ status: "missed" });
+    if (visit.visitType === "followup")
+      await Patient.update({ isFollowup: "no", followupDuration: "No", followupDate: null }, { where: { id: visit.patientId } });
+    if (visit.visitType === "appointment")
+      await Patient.update({ isAppointed: "no" }, { where: { id: visit.patientId } });
+    res.json({ visit, message: "Visit cancelled successfully" });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to cancel visit" }); }
+});
+
+router.delete("/visits", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0)
+      return res.status(400).json({ error: "No visit IDs provided" });
+    const count = await PatientVisit.destroy({ where: { id: ids } });
+    res.json({ message: `${count} visit record(s) deleted successfully`, count });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to bulk delete visits" }); }
+});
+
+router.delete("/visits/:visitId", async (req, res) => {
+  try {
+    const visit = await PatientVisit.findByPk(req.params.visitId);
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
+    await visit.destroy();
+    res.json({ message: "Visit record deleted successfully" });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to delete visit record" }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATIENT LIST ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
 router.get("/", async (req, res) => {
   try {
-    const patients = await Patient.findAll({ order: [["createdAt", "DESC"]] });
+    const patients = await Patient.findAll({ where: { doctorId: req.doctorId }, order: [["createdAt", "DESC"]] });
     res.json(patients);
   } catch (err) { res.status(500).json({ error: "Failed to fetch patients" }); }
 });
 
 router.get("/appointments", async (req, res) => {
   try {
-    const patients = await Patient.findAll({ where: { isOpd: "no" }, order: [["createdAt", "DESC"]] });
+    const patients = await Patient.findAll({ where: { isOpd: "no", doctorId: req.doctorId }, order: [["createdAt", "DESC"]] });
     res.json(patients);
   } catch (err) { res.status(500).json({ error: "Failed to fetch appointments" }); }
 });
 
 router.get("/followups", async (req, res) => {
   try {
-    const patients = await Patient.findAll({ where: { isFollowup: "yes" }, order: [["followupDate", "ASC"]] });
+    const patients = await Patient.findAll({ where: { isFollowup: "yes", doctorId: req.doctorId }, order: [["followupDate", "ASC"]] });
     res.json(patients);
   } catch (err) { res.status(500).json({ error: "Failed to fetch followups" }); }
 });
@@ -46,7 +88,7 @@ router.get("/opd", async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const visits = await PatientVisit.findAll({
       where: { visitDate: today, status: "completed" },
-      include: [{ model: Patient, as: "patient" }],
+      include: [{ model: Patient, as: "patient", where: { doctorId: req.doctorId } }],
       order: [["updatedAt", "DESC"]],
     });
     const patients = visits.map((v) => ({ ...v.patient.toJSON(), visitId: v.id }));
@@ -57,12 +99,16 @@ router.get("/opd", async (req, res) => {
 router.get("/history", async (req, res) => {
   try {
     const visits = await PatientVisit.findAll({
-      include: [{ model: Patient, as: "patient" }],
+      include: [{ model: Patient, as: "patient", where: { doctorId: req.doctorId } }],
       order: [["visitDate", "DESC"], ["createdAt", "DESC"]],
     });
     res.json(visits);
   } catch (err) { console.error(err); res.status(500).json({ error: "Failed to fetch history" }); }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SINGLE PATIENT ROUTES (/:id — keep these LAST)
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/:id", async (req, res) => {
   try {
@@ -82,7 +128,6 @@ router.get("/:id/visits", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to fetch visit history" }); }
 });
 
-// PUT basic info only (whitelisted)
 router.put("/:id", async (req, res) => {
   try {
     const updates = {};
@@ -96,7 +141,6 @@ router.put("/:id", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to update patient" }); }
 });
 
-// PUT health info (separate whitelisted endpoint)
 router.put("/:id/health", async (req, res) => {
   try {
     const updates = {};
@@ -157,45 +201,51 @@ router.patch("/:id/cancel-followup", async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Failed to cancel follow-up" }); }
 });
 
-router.patch("/visits/:visitId/cancel", async (req, res) => {
+router.patch("/:id/followup-date", async (req, res) => {
   try {
-    const visit = await PatientVisit.findByPk(req.params.visitId);
-    if (!visit) return res.status(404).json({ error: "Visit not found" });
-    if (visit.status === "completed")
-      return res.status(400).json({ error: "Cannot cancel a completed visit" });
-    await visit.update({ status: "missed" });
-    if (visit.visitType === "followup")
-      await Patient.update({ isFollowup: "no", followupDuration: "No", followupDate: null }, { where: { id: visit.patientId } });
-    if (visit.visitType === "appointment")
-      await Patient.update({ isAppointed: "no" }, { where: { id: visit.patientId } });
-    res.json({ visit, message: "Visit cancelled successfully" });
-  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to cancel visit" }); }
-});
+    const { followupDate } = req.body;
+    if (!followupDate) return res.status(400).json({ error: "followupDate is required" });
+    const patient = await Patient.findByPk(req.params.id);
+    if (!patient) return res.status(404).json({ error: "Patient not found" });
 
-router.delete("/visits/:visitId", async (req, res) => {
-  try {
-    const visit = await PatientVisit.findByPk(req.params.visitId);
-    if (!visit) return res.status(404).json({ error: "Visit not found" });
-    await visit.destroy();
-    res.json({ message: "Visit record deleted successfully" });
-  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to delete visit record" }); }
+    if (patient.followupDate) {
+      await PatientVisit.update(
+        { visitDate: followupDate },
+        { where: { patientId: req.params.id, visitType: "followup", visitDate: patient.followupDate, status: "pending" } }
+      );
+    } else {
+      await PatientVisit.findOrCreate({
+        where: { patientId: req.params.id, visitType: "followup", visitDate: followupDate },
+        defaults: { status: "pending" },
+      });
+    }
+    await Patient.update({ followupDate, isFollowup: "yes" }, { where: { id: req.params.id } });
+    const updated = await Patient.findByPk(req.params.id);
+    res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Failed to update followup date" }); }
 });
 
 router.patch("/:id/export", async (req, res) => {
-  const { followupDuration, aiReport, treatmentApproved } = req.body;
+  const { followupDuration, aiReport, treatmentApproved, customFollowupDate } = req.body;
   try {
     const isFollowup = followupDuration !== "No" ? "yes" : "no";
     let followupDate = null;
-    if (followupDuration && FOLLOWUP_DAYS[followupDuration]) {
+
+    if (followupDuration === "Custom Date" && customFollowupDate) {
+      followupDate = customFollowupDate;
+    } else if (followupDuration && FOLLOWUP_DAYS[followupDuration]) {
       const d = new Date();
       d.setDate(d.getDate() + FOLLOWUP_DAYS[followupDuration]);
       followupDate = d.toISOString().slice(0, 10);
     }
+
     if (isFollowup === "yes" && !followupDate)
       return res.status(400).json({ error: `Unknown followup duration: ${followupDuration}` });
 
+    const durationLabel = followupDuration === "Custom Date" ? `Custom: ${followupDate}` : followupDuration;
+
     await Patient.update(
-      { isOpd: "yes", isFollowup, followupDuration, followupDate, aiReport, treatmentApproved },
+      { isOpd: "yes", isFollowup, followupDuration: durationLabel, followupDate, aiReport, treatmentApproved },
       { where: { id: req.params.id } },
     );
     const today = new Date().toISOString().slice(0, 10);

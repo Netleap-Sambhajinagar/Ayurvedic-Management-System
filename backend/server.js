@@ -8,6 +8,8 @@ const doctorRoutes = require("./routes/doctorRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const webhookRoutes = require("./routes/googleWebhook");
 
+// Register ALL models before sync so every table is created
+require("./models/Doctor");
 require("./models/Patient");
 require("./models/PatientVisit");
 
@@ -22,8 +24,6 @@ app.use(
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
 
-require("./services/syncPatient");
-
 app.use("/api/auth", authRoutes);
 app.use("/api", doctorRoutes);
 app.use("/api/patients", patientRoutes);
@@ -35,7 +35,11 @@ const syncOptions =
 
 sequelize
   .sync(syncOptions)
-  .then(() => console.log("✅ MySQL connected and synced"))
+  .then(() => {
+    console.log("✅ MySQL connected and synced");
+    // Start the Google Sheets sync AFTER DB is ready
+    require("./services/syncPatient");
+  })
   .catch((err) => console.error("❌ MySQL connection error:", err));
 
 const PORT = process.env.PORT || 5000;

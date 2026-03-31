@@ -3,6 +3,8 @@ const sequelize = require("../config/database");
 
 const Patient = sequelize.define("Patient", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  // Multi-doctor support: each patient is assigned to a specific doctor via Google Form
+  doctorId: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
   email: { type: DataTypes.STRING, allowNull: false, unique: true, validate: { isEmail: true } },
   name: { type: DataTypes.STRING, allowNull: false },
   age: { type: DataTypes.INTEGER, allowNull: false, validate: { min: 0 } },
@@ -54,6 +56,8 @@ const Patient = sequelize.define("Patient", {
   treatmentApproved: { type: DataTypes.BOOLEAN, defaultValue: true },
   followupDuration:  { type: DataTypes.STRING, defaultValue: "No" },
   followupDate:      { type: DataTypes.DATEONLY, defaultValue: null },
+  // Allow custom followup date override (set when doctor edits from UI)
+  followupDateOverride: { type: DataTypes.DATEONLY, defaultValue: null },
 }, { timestamps: true });
 
 module.exports = Patient;

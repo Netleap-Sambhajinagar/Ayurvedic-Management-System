@@ -77,6 +77,7 @@ export default function PatientDetails() {
   const [modifyMode, setModifyMode] = useState(false);
   const [reportText, setReportText] = useState("");
   const [followUp, setFollowUp] = useState("No");
+  const [customFollowupDate, setCustomFollowupDate] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const [focused, setFocused] = useState(null);
@@ -129,13 +130,90 @@ export default function PatientDetails() {
   };
 
   const handleExport = async () => {
+    // Validate custom date if selected
+    if (followUp === "Custom Date" && !customFollowupDate) {
+      showToast("Please pick a custom follow-up date.", "error");
+      return;
+    }
     setExporting(true);
     try {
-      const r=await axios.patch(`${PATIENTS_API}/${id}/export`,{followupDuration:followUp,aiReport:reportText,treatmentApproved:approved});
-      setPatientData(r.data); setExported(true); showToast("Report exported."); await fetchVisits();
-      setTimeout(()=>setExported(false),2500);
-    } catch(err) { showToast(err?.response?.data?.error||"Failed.","error"); }
-    finally { setExporting(false); }
+      // For custom date, pass as a special duration token the backend resolves
+      const followupPayload = followUp === "Custom Date" ? "Custom Date" : followUp;
+      const r = await axios.patch(`${PATIENTS_API}/${id}/export`, {
+        followupDuration: followupPayload,
+        customFollowupDate: followUp === "Custom Date" ? customFollowupDate : undefined,
+        aiReport: reportText,
+        treatmentApproved: approved
+      });
+      setPatientData(r.data);
+      setExported(true);
+      showToast("Report exported.");
+      await fetchVisits();
+
+      // Generate & download PDF
+      try {
+        const patient = r.data;
+        const { jsPDF } = await import("jspdf");
+        const doc = new jsPDF();
+        const lineH = 7;
+        let y = 20;
+        const line = (txt, bold = false) => {
+          doc.setFont("helvetica", bold ? "bold" : "normal");
+          doc.setFontSize(bold ? 12 : 10);
+          doc.text(txt, 15, y);
+          y += lineH;
+        };
+        const divider = () => { doc.setDrawColor(200); doc.line(15, y, 195, y); y += 4; };
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text("Ayurvedic Patient Report", 105, y, { align: "center" });
+        y += 10;
+        divider();
+
+        line(`Patient: ${patient.name}`, true);
+        line(`Email: ${patient.email}`);
+        line(`Age: ${patient.age} yrs   Height: ${patient.height} cm   Weight: ${patient.weight} kg`);
+        line(`Contact: ${patient.contactNo}`);
+        line(`Dosha: ${patient.vikritiType || "Pending"}   Severity: ${patient.severity || "—"}`);
+        y += 3;
+        divider();
+
+        line("Treatment", true);
+        line(`Approved: ${approved ? "Yes" : "No (Modified)"}`);
+        y += 2;
+        const reportLines = doc.splitTextToSize(reportText, 175);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        reportLines.forEach(l => { doc.text(l, 15, y); y += 5.5; });
+        y += 3;
+        divider();
+
+        line("Follow-up", true);
+        const followupLabel = followUp === "Custom Date"
+          ? `Custom Date: ${customFollowupDate}`
+          : followUp === "No" ? "None scheduled" : followUp;
+        line(`Schedule: ${followupLabel}`);
+        if (patient.followupDate) line(`Follow-up Date: ${new Date(patient.followupDate).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}`);
+        y += 3;
+        divider();
+
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Generated on ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}`, 105, 285, { align: "center" });
+
+        doc.save(`${patient.name.replace(/\s+/g, "_")}_report.pdf`);
+      } catch (pdfErr) {
+        console.warn("PDF generation failed (jspdf may not be installed):", pdfErr);
+        showToast("Report saved. Install jspdf to enable PDF download.", "error");
+      }
+
+      setTimeout(() => setExported(false), 2500);
+    } catch (err) {
+      showToast(err?.response?.data?.error || "Failed.", "error");
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) return (
@@ -315,8 +393,8 @@ export default function PatientDetails() {
                 )}
                 <div className="inline-flex flex-col rounded-xl px-4 py-3 w-fit" style={{ background:"white", border:"1px solid var(--border)" }}>
                   <p className="text-[10px] uppercase tracking-widest font-medium mb-2" style={{ color:"var(--mist)" }}>Schedule Follow-up?</p>
-                  <div className="flex gap-4">
-                    {["No","7 Days","15 Days"].map(opt=>(
+                  <div className="flex gap-4 flex-wrap">
+                    {["No","7 Days","15 Days","1 Month","Custom Date"].map(opt=>(
                       <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
                         <span onClick={()=>setFollowUp(opt)} className="w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 transition-all cursor-pointer"
                           style={{ borderColor:followUp===opt?"var(--fern)":"var(--sand)", background:followUp===opt?"var(--fern)":"transparent" }}/>
@@ -327,6 +405,19 @@ export default function PatientDetails() {
                       </label>
                     ))}
                   </div>
+                  {followUp==="Custom Date" && (
+                    <div className="mt-3">
+                      <label className="block text-[10px] uppercase tracking-widest font-medium mb-1" style={{ color:"var(--mist)" }}>Pick Date</label>
+                      <input
+                        type="date"
+                        value={customFollowupDate}
+                        min={new Date().toISOString().slice(0,10)}
+                        onChange={e=>setCustomFollowupDate(e.target.value)}
+                        className="rounded-xl px-3 py-1.5 text-sm outline-none"
+                        style={{ border:"1px solid rgba(39,103,73,.3)", background:"white", color:"var(--ink)", fontFamily:"var(--font-sans)" }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               <button onClick={handleExport} disabled={exporting}
